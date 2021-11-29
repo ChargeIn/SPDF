@@ -1,0 +1,11 @@
+<div class="container">
+  <h1 class="title">
+    {{ 'PAGES.HOME.TITLE' | translate }}
+  </h1>
+
+  <a routerLink="/detail">{{ 'PAGES.HOME.GO_TO_DETAIL' | translate }}</a>
+  <!-- html approach (does not capture input change event) -->
+  <input type="file"  (change)="fileChanged($event)">
+
+  <canvas id="canvasElement"></canvas>
+</div>
