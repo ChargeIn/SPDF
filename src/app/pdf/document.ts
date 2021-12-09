@@ -4,19 +4,45 @@ By Devon Govett
 Translated to ts by Florian Plesker
 */
 import * as stream from 'stream';
+import * as CryptoJS from 'crypto-js';
 import { PDFReference } from './reference';
-import { PDFNameTree } from './trees';
+import { PDFNameTree, PDFNumberTree } from './trees';
 import { PDFSecurity } from './security';
-import { PDFInfo, PDFOptions } from './types';
+import {
+  AnnotateOptions,
+  FileSpecRefData,
+  FileSrcOptions,
+  ImageOptions,
+  MarkingOptions,
+  PDFInfo,
+  PDFOptions,
+  RefData,
+  TextOptions,
+} from './types';
 import { PDFPage } from './page';
 import { namedColors } from './mixins/color';
 import { _CAP_STYLES, _JOIN_STYLES, KAPPA } from './mixins/vector';
 import { PDFObject } from './object';
-import { PDFGradient } from './gradient';
+import { PDFGradient, PDFLinearGradient, PDFRadialGradient } from './gradient';
 import { SVGPath } from './path';
 import * as fs from 'fs';
-import { FIELD_FLAGS, FIELD_JUSTIFY, VALUE_MAP } from './mixins/acroform';
+import {
+  FIELD_FLAGS,
+  FIELD_JUSTIFY,
+  FORMAT_DEFAULT,
+  FORMAT_SPECIAL,
+  VALUE_MAP,
+} from './mixins/acroform';
+import { PDFTilingPattern } from './pattern';
+import { LineWrapper } from './line_wrapper';
+import { PDFOutline } from './outline';
+import { isEqual } from './mixins/attachments';
+import { PDFFont, PDFFontFactory } from './font';
+import { PDFStructureContent } from './structure_content';
+import { PDFStructureElement } from './structure_element';
+import { PDFImage } from './images';
 
+// eslint-disable-next-line id-blacklist
 const { number } = PDFObject;
 
 export class PDFDocument extends stream.Readable {
@@ -24,20 +50,43 @@ export class PDFDocument extends stream.Readable {
   compress: boolean;
   offset = 0;
   security: any;
-  info: PDFInfo;
+  info: PDFInfo | PDFReference;
   id: Buffer;
   ctm: number[] = [];
   page: PDFPage | null = null;
+  patternCount = 0;
+  gradCount = 0;
+  filledColor!: [string, number];
 
   root: PDFReference;
+  x = 0;
+  y = 0;
   readonly version: number;
   private _pageBuffer: PDFPage[] = [];
   private _pageBufferStart = 0;
-  private _offsets: (number | null)[] = [];
+  private readonly _offsets: (string | number | null)[] = [];
   private _waiting: number;
   private _ended: boolean;
-  private x: number = 0;
-  private y: number = 0;
+  private _fontFamilies: any;
+  private _outline: PDFOutline;
+  private _font: PDFFont;
+  private _fontSize: number;
+  private _fontCount: number;
+  private _ctmStack: number[][] = [];
+  private _opacityRegistry = {};
+  private _opacityCount = 0;
+  private _acroform: {
+    fonts: { [key: string]: PDFReference };
+    defaultFont: string;
+  };
+  private _wrapper: LineWrapper;
+  private _fileRegistry: { [key: string]: FileSpecRefData };
+  private _lineGap: number;
+  private _imageCount: number;
+  private _registeredFonts: { [key: string]: PDFFont };
+  private _imageRegistry: { [key: string]: PDFImage };
+  private _structChildren: PDFStructureContent[];
+  private _textOptions: TextOptions;
 
   constructor(options: PDFOptions = {}) {
     super(options);
@@ -115,7 +164,8 @@ export class PDFDocument extends stream.Readable {
     };
 
     if (this.options.info) {
-      for (let key in this.options.info) {
+      // eslint-disable-next-line guard-for-in
+      for (const key in this.options.info) {
         this.info[key] = this.options.info[key];
       }
     }
@@ -178,7 +228,7 @@ export class PDFDocument extends stream.Readable {
     return this;
   }
 
-  continueOnNewPage(options) {
+  continueOnNewPage(options?: PDFOptions) {
     const pageMarkings = this.endPageMarkings(this.page);
 
     this.addPage(options);
@@ -211,7 +261,7 @@ export class PDFDocument extends stream.Readable {
     const pages = this._pageBuffer;
     this._pageBuffer = [];
     this._pageBufferStart += pages.length;
-    for (let page of pages) {
+    for (const page of pages) {
       this.endPageMarkings(page);
       page.end();
     }
@@ -244,14 +294,14 @@ export class PDFDocument extends stream.Readable {
     if (!this.root.data.Names.data.JavaScript) {
       this.root.data.Names.data.JavaScript = new PDFNameTree();
     }
-    let data = {
+    const data = {
       JS: String(js),
       S: 'JavaScript',
     };
     this.root.data.Names.data.JavaScript.add(name, data);
   }
 
-  ref(data?: any) {
+  ref(data?: RefData) {
     const ref = new PDFReference(this, this._offsets.length + 1, data);
     this._offsets.push(null); // placeholder for this object's offset once it is finalized
     this._waiting++;
@@ -261,7 +311,7 @@ export class PDFDocument extends stream.Readable {
   override _read() {}
   // do nothing, but this method is required by node
 
-  _write(data: string | any[] | Buffer) {
+  _write(data: string | number | any[] | Buffer) {
     if (!Buffer.isBuffer(data)) {
       data = Buffer.from(data + '\n', 'binary');
     }
@@ -300,13 +350,14 @@ Please pipe the document into a Node stream.\
   end() {
     this.flushPages();
     this.info = this.ref();
-    for (let key in this.info) {
+    // eslint-disable-next-line guard-for-in
+    for (const key in this.info) {
       let val = this.info[key];
       if (typeof val === 'string') {
         val = String(val);
       }
 
-      let entry = this.ref(val);
+      const entry = this.ref(val);
       entry.end();
 
       this.info.data[key] = entry;
@@ -314,7 +365,7 @@ Please pipe the document into a Node stream.\
 
     this.info.end();
 
-    for (let name in this._fontFamilies) {
+    for (const name in this._fontFamilies) {
       const font = this._fontFamilies[name];
       font.finalize();
     }
@@ -355,14 +406,14 @@ Please pipe the document into a Node stream.\
     }
 
     // trailer
-    const trailer = {
+    const trailer: any = {
       Size: this._offsets.length + 1,
-      Root: this._root,
-      Info: this._info,
-      ID: [this._id, this._id],
+      Root: this.root,
+      Info: this.info,
+      ID: [this.id, this.id],
     };
-    if (this._security) {
-      trailer.Encrypt = this._security.dictionary;
+    if (this.security) {
+      trailer.Encrypt = this.security.dictionary;
     }
 
     this._write('trailer');
@@ -383,18 +434,12 @@ Please pipe the document into a Node stream.\
   // Color
   // ---------------------------------------------------------
 
-  private _opacityRegistry = {};
-  private _opacityCount = 0;
-  patternCount = 0;
-  private _gradCount = 0;
-  private _fillColor!: [string, number];
-
   initColor() {
     // The opacity dictionaries
     this._opacityRegistry = {};
     this._opacityCount = 0;
     this.patternCount = 0;
-    return (this._gradCount = 0);
+    return (this.gradCount = 0);
   }
 
   normalizeColor(color: string | number[]): number[] | null {
@@ -427,13 +472,16 @@ Please pipe the document into a Node stream.\
     return null;
   }
 
-  _setColor(color: PDFGradient | string | number[], stroke: boolean) {
+  _setColor(
+    color: PDFGradient | string | number[] | [PDFTilingPattern, number[]],
+    stroke: boolean
+  ) {
     if (color instanceof PDFGradient) {
       color.apply(stroke);
       return true;
-      // see if tiling pattern, decode & apply it it
+      // see if tiling pattern, decode & apply it
     } else if (Array.isArray(color) && color[0] instanceof PDFTilingPattern) {
-      color[0].apply(stroke, color[1]);
+      color[0].apply(stroke, color[1] as number[]);
       return true;
     }
     // any other case should be a normal color and not a pattern
@@ -473,7 +521,7 @@ Please pipe the document into a Node stream.\
 
     // save this for text wrapper, which needs to reset
     // the fill color on new pages
-    this._fillColor = [color, opacity!];
+    this.filledColor = [color, opacity!];
     return this;
   }
 
@@ -501,7 +549,8 @@ Please pipe the document into a Node stream.\
   }
 
   _doOpacity(fillOpacity: number | null, strokeOpacity?: number | null) {
-    let dictionary, name;
+    let dictionary;
+    let name;
     if (fillOpacity == null && strokeOpacity == null) {
       return;
     }
@@ -545,29 +594,26 @@ Please pipe the document into a Node stream.\
     return new PDFRadialGradient(this, x1, y1, r1, x2, y2, r2);
   }
 
-  pattern(bbox, xStep, yStep, stream) {
-    return new PDFTilingPattern(this, bbox, xStep, yStep, stream);
+  pattern(bbox, xStep, yStep, strStream) {
+    return new PDFTilingPattern(this, bbox, xStep, yStep, strStream);
   }
 
   // Vector
   // ---------------------------------------------------------
 
-  private _ctm: number[] = [];
-  private _ctmStack: number[][] = [];
-
   initVector() {
-    this._ctm = [1, 0, 0, 1, 0, 0]; // current transformation matrix
+    this.ctm = [1, 0, 0, 1, 0, 0]; // current transformation matrix
     return (this._ctmStack = []);
   }
 
   save() {
-    this._ctmStack.push(this._ctm.slice());
+    this._ctmStack.push(this.ctm.slice());
     // TODO: save/restore colorspace and styles so not setting it unnessesarily all the time?
     return this.addContent('q');
   }
 
   restore() {
-    this._ctm = this._ctmStack.pop() || [1, 0, 0, 1, 0, 0];
+    this.ctm = this._ctmStack.pop() || [1, 0, 0, 1, 0, 0];
     return this.addContent('Q');
   }
 
@@ -773,8 +819,9 @@ Please pipe the document into a Node stream.\
 
   polygon(...points: [number, number][]) {
     this.moveTo(...(points.shift() || []));
-    for (let point of points) {
-      this.lineTo(...(point || []));
+    const empty: [number, number] = [] as any;
+    for (const point of points) {
+      this.lineTo(...(point || empty));
     }
     return this.closePath();
   }
@@ -792,7 +839,7 @@ Please pipe the document into a Node stream.\
     return '';
   }
 
-  fill(color: string, rule?: string) {
+  fill(color?: string, rule?: string) {
     let hasColor = true;
     if (/(even-?odd)|(non-?zero)/.test(color)) {
       rule = color;
@@ -851,7 +898,7 @@ Please pipe the document into a Node stream.\
     dy: number
   ) {
     // keep track of the current transformation matrix
-    const m = this._ctm;
+    const m = this.ctm;
     const [m0, m1, m2, m3, m4, m5] = m;
     m[0] = m0 * m11 + m2 * m12;
     m[1] = m1 * m11 + m3 * m12;
@@ -919,21 +966,20 @@ Please pipe the document into a Node stream.\
     }
     this._acroform = {
       fonts: {},
-      defaultFont: this._font.name
+      defaultFont: this._font.name,
     };
     this._acroform.fonts[this._font.id] = this._font.ref();
 
-    let data = {
+    const data = {
       Fields: [],
       NeedAppearances: true,
       DA: String(`/${this._font.id} 0 Tf 0 g`),
       DR: {
-        Font: {}
-      }
+        Font: {},
+      },
     };
     data.DR.Font[this._font.id] = this._font.ref();
-    const AcroForm = this.ref(data);
-    this._root.data.AcroForm = AcroForm;
+    this.root.data.AcroForm = this.ref(data);
     return this;
   }
 
@@ -941,28 +987,28 @@ Please pipe the document into a Node stream.\
    * Called automatically by document.js
    */
   endAcroForm() {
-    if (this._root.data.AcroForm) {
+    if (this.root.data.AcroForm) {
       if (
-          !Object.keys(this._acroform.fonts).length &&
-          !this._acroform.defaultFont
+        !Object.keys(this._acroform.fonts).length &&
+        !this._acroform.defaultFont
       ) {
         throw new Error('No fonts specified for PDF form');
       }
-      let fontDict = this._root.data.AcroForm.data.DR.Font;
-      Object.keys(this._acroform.fonts).forEach(name => {
+      const fontDict = this.root.data.AcroForm.data.DR.Font;
+      Object.keys(this._acroform.fonts).forEach((name) => {
         fontDict[name] = this._acroform.fonts[name];
       });
-      this._root.data.AcroForm.data.Fields.forEach(fieldRef => {
+      this.root.data.AcroForm.data.Fields.forEach((fieldRef) => {
         this._endChild(fieldRef);
       });
-      this._root.data.AcroForm.end();
+      this.root.data.AcroForm.end();
     }
     return this;
   }
 
   _endChild(ref) {
     if (Array.isArray(ref.data.Kids)) {
-      ref.data.Kids.forEach(childRef => {
+      ref.data.Kids.forEach((childRef) => {
         this._endChild(childRef);
       });
       ref.end();
@@ -974,12 +1020,13 @@ Please pipe the document into a Node stream.\
    * Creates and adds a form field to the document. Form fields are intermediate
    * nodes in a PDF form that are used to specify form name heirarchy and form
    * value defaults.
-   * @param {string} name - field name (T attribute in field dictionary)
-   * @param {object} options  - other attributes to include in field dictionary
+   *
+   * @param name - field name (T attribute in field dictionary)
+   * @param options  - other attributes to include in field dictionary
    */
   formField(name, options = {}) {
-    let fieldDict = this._fieldDict(name, null, options);
-    let fieldRef = this.ref(fieldDict);
+    const fieldDict = this._fieldDict(name, null, options);
+    const fieldRef = this.ref(fieldDict);
     this._addToParent(fieldRef);
     return fieldRef;
   }
@@ -987,16 +1034,17 @@ Please pipe the document into a Node stream.\
   /**
    * Creates and adds a Form Annotation to the document. Form annotations are
    * called Widget annotations internally within a PDF file.
-   * @param {string} name - form field name (T attribute of widget annotation
+   *
+   * @param name - form field name (T attribute of widget annotation
    * dictionary)
-   * @param {number} x
-   * @param {number} y
-   * @param {number} w
-   * @param {number} h
-   * @param {object} options
+   * @param x
+   * @param y
+   * @param w
+   * @param h
+   * @param options
    */
-  formAnnotation(name, type, x, y, w, h, options = {}) {
-    let fieldDict = this._fieldDict(name, type, options);
+  formAnnotation(name, type, x, y, w, h, options: RefData = {}) {
+    const fieldDict = this._fieldDict(name, type, options);
     fieldDict.Subtype = 'Widget';
     if (fieldDict.F === undefined) {
       fieldDict.F = 4; // print the annotation
@@ -1004,7 +1052,7 @@ Please pipe the document into a Node stream.\
 
     // Add Field annot to page, and get it's ref
     this.annotate(x, y, w, h, fieldDict);
-    let annotRef = this.page.annotations[this.page.annotations.length - 1];
+    const annotRef = this.page.annotations[this.page.annotations.length - 1];
 
     return this._addToParent(annotRef);
   }
@@ -1034,22 +1082,22 @@ Please pipe the document into a Node stream.\
   }
 
   _addToParent(fieldRef) {
-    let parent = fieldRef.data.Parent;
+    const parent = fieldRef.data.Parent;
     if (parent) {
       if (!parent.data.Kids) {
         parent.data.Kids = [];
       }
       parent.data.Kids.push(fieldRef);
     } else {
-      this._root.data.AcroForm.data.Fields.push(fieldRef);
+      this.root.data.AcroForm.data.Fields.push(fieldRef);
     }
     return this;
   }
 
-  _fieldDict(name, type, options = {}) {
+  _fieldDict(name, type, options: RefData = {}) {
     if (!this._acroform) {
       throw new Error(
-          'Call document.initForms() method before adding form elements to document'
+        'Call document.initForms() method before adding form elements to document'
       );
     }
     let opts = Object.assign({}, options);
@@ -1062,7 +1110,7 @@ Please pipe the document into a Node stream.\
     opts = this._resolveStrings(opts);
     opts = this._resolveColors(opts);
     opts = this._resolveFormat(opts);
-    opts.T = new String(name);
+    opts.T = String(name);
     if (opts.parent) {
       opts.Parent = opts.parent;
       delete opts.parent;
@@ -1103,7 +1151,7 @@ Please pipe the document into a Node stream.\
         fnFormat = `AFSpecial_Format`;
         params = FORMAT_SPECIAL[f.type];
       } else {
-        let format = f.type.charAt(0).toUpperCase() + f.type.slice(1);
+        const format = f.type.charAt(0).toUpperCase() + f.type.slice(1);
         fnKeystroke = `AF${format}_Keystroke`;
         fnFormat = `AF${format}_Format`;
 
@@ -1113,30 +1161,30 @@ Please pipe the document into a Node stream.\
         } else if (f.type === 'time') {
           params = String(f.param);
         } else if (f.type === 'number') {
-          let p = Object.assign({}, FORMAT_DEFAULT.number, f);
+          const p = Object.assign({}, FORMAT_DEFAULT.number, f);
           params = String(
-              [
-                String(p.nDec),
-                p.sepComma ? '0' : '1',
-                '"' + p.negStyle + '"',
-                'null',
-                '"' + p.currency + '"',
-                String(p.currencyPrepend)
-              ].join(',')
+            [
+              String(p.nDec),
+              p.sepComma ? '0' : '1',
+              '"' + p.negStyle + '"',
+              'null',
+              '"' + p.currency + '"',
+              String(p.currencyPrepend),
+            ].join(',')
           );
         } else if (f.type === 'percent') {
-          let p = Object.assign({}, FORMAT_DEFAULT.percent, f);
+          const p = Object.assign({}, FORMAT_DEFAULT.percent, f);
           params = String([String(p.nDec), p.sepComma ? '0' : '1'].join(','));
         }
       }
       opts.AA = opts.AA ? opts.AA : {};
       opts.AA.K = {
         S: 'JavaScript',
-        JS: new String(`${fnKeystroke}(${params});`)
+        JS: String(`${fnKeystroke}(${params});`),
       };
       opts.AA.F = {
         S: 'JavaScript',
-        JS: new String(`${fnFormat}(${params});`)
+        JS: String(`${fnFormat}(${params});`),
       };
     }
     delete opts.format;
@@ -1144,14 +1192,14 @@ Please pipe the document into a Node stream.\
   }
 
   _resolveColors(opts) {
-    let color = this._normalizeColor(opts.backgroundColor);
+    let color = this.normalizeColor(opts.backgroundColor);
     if (color) {
       if (!opts.MK) {
         opts.MK = {};
       }
       opts.MK.BG = color;
     }
-    color = this._normalizeColor(opts.borderColor);
+    color = this.normalizeColor(opts.borderColor);
     if (color) {
       if (!opts.MK) {
         opts.MK = {};
@@ -1165,7 +1213,7 @@ Please pipe the document into a Node stream.\
 
   _resolveFlags(options) {
     let result = 0;
-    Object.keys(options).forEach(key => {
+    Object.keys(options).forEach((key) => {
       if (FIELD_FLAGS[key]) {
         result |= FIELD_FLAGS[key];
         delete options[key];
@@ -1176,7 +1224,7 @@ Please pipe the document into a Node stream.\
       options.Ff |= result;
     }
     return options;
-  },
+  }
 
   _resolveJustify(options) {
     let result = 0;
@@ -1206,18 +1254,18 @@ Please pipe the document into a Node stream.\
       const fontSize = options.fontSize || 0;
 
       options.DR.Font[this._font.id] = this._font.ref();
-      options.DA = new String(`/${this._font.id} ${fontSize} Tf 0 g`);
+      options.DA = String(`/${this._font.id} ${fontSize} Tf 0 g`);
     }
     return options;
   }
 
   _resolveStrings(options) {
-    let select = [];
+    const select = [];
     function appendChoices(a) {
       if (Array.isArray(a)) {
         for (let idx = 0; idx < a.length; idx++) {
           if (typeof a[idx] === 'string') {
-            select.push(new String(a[idx]));
+            select.push(String(a[idx]));
           } else {
             select.push(a[idx]);
           }
@@ -1233,24 +1281,24 @@ Please pipe the document into a Node stream.\
       options.Opt = select;
     }
 
-    Object.keys(VALUE_MAP).forEach(key => {
+    Object.keys(VALUE_MAP).forEach((key) => {
       if (options[key] !== undefined) {
         options[VALUE_MAP[key]] = options[key];
         delete options[key];
       }
     });
-    ['V', 'DV'].forEach(key => {
+    ['V', 'DV'].forEach((key) => {
       if (typeof options[key] === 'string') {
-        options[key] = new String(options[key]);
+        options[key] = String(options[key]);
       }
     });
 
     if (options.MK && options.MK.CA) {
-      options.MK.CA = new String(options.MK.CA);
+      options.MK.CA = String(options.MK.CA);
     }
     if (options.label) {
       options.MK = options.MK ? options.MK : {};
-      options.MK.CA = new String(options.label);
+      options.MK.CA = String(options.label);
       delete options.label;
     }
     return options;
@@ -1259,7 +1307,7 @@ Please pipe the document into a Node stream.\
   // Annotations
   // ---------------------------------------------------------
 
-  annotate(x, y, w, h, options) {
+  annotate(x, y, w, h, options: AnnotateOptions = {}) {
     options.Type = 'Annot';
     options.Rect = this._convertRect(x, y, w, h);
     options.Border = [0, 0, 0];
@@ -1270,19 +1318,18 @@ Please pipe the document into a Node stream.\
 
     if (options.Subtype !== 'Link') {
       if (options.C == null) {
-        options.C = this._normalizeColor(options.color || [0, 0, 0]);
+        options.C = this.normalizeColor(options.color || [0, 0, 0]);
       }
     } // convert colors
     delete options.color;
 
     if (typeof options.Dest === 'string') {
-      options.Dest = new String(options.Dest);
+      options.Dest = String(options.Dest);
     }
 
     // Capitalize keys
-    for (let key in options) {
-      const val = options[key];
-      options[key[0].toUpperCase() + key.slice(1)] = val;
+    for (const key in options) {
+      options[key[0].toUpperCase() + key.slice(1)] = options[key];
     }
 
     const ref = this.ref(options);
@@ -1291,9 +1338,9 @@ Please pipe the document into a Node stream.\
     return this;
   }
 
-  note(x, y, w, h, contents, options = {}) {
+  note(x, y, w, h, contents, options: AnnotateOptions = {}) {
     options.Subtype = 'Text';
-    options.Contents = new String(contents);
+    options.Contents = String(contents);
     options.Name = 'Comment';
     if (options.color == null) {
       options.color = [243, 223, 92];
@@ -1301,26 +1348,26 @@ Please pipe the document into a Node stream.\
     return this.annotate(x, y, w, h, options);
   }
 
-  goTo(x, y, w, h, name, options = {}) {
+  goTo(x, y, w, h, name, options: AnnotateOptions = {}) {
     options.Subtype = 'Link';
     options.A = this.ref({
       S: 'GoTo',
-      D: new String(name)
+      D: String(name),
     });
     options.A.end();
     return this.annotate(x, y, w, h, options);
   }
 
-  link(x, y, w, h, url, options = {}) {
+  link(x, y, w, h, url, options: { Subtype?: string; A?: PDFReference } = {}) {
     options.Subtype = 'Link';
 
     if (typeof url === 'number') {
       // Link to a page in the document (the page must already exist)
-      const pages = this._root.data.Pages.data;
+      const pages = this.root.data.Pages.data;
       if (url >= 0 && url < pages.Kids.length) {
         options.A = this.ref({
           S: 'GoTo',
-          D: [pages.Kids[url], 'XYZ', null, null, null]
+          D: [pages.Kids[url], 'XYZ', null, null, null],
         });
         options.A.end();
       } else {
@@ -1330,7 +1377,7 @@ Please pipe the document into a Node stream.\
       // Link to an external url
       options.A = this.ref({
         S: 'URI',
-        URI: new String(url)
+        URI: String(url),
       });
       options.A.end();
     }
@@ -1338,14 +1385,20 @@ Please pipe the document into a Node stream.\
     return this.annotate(x, y, w, h, options);
   }
 
-  _markup(x, y, w, h, options = {}) {
+  _markup(
+    x,
+    y,
+    w,
+    h,
+    options: { QuadPoints?: number[]; Contents?: string } = {}
+  ) {
     const [x1, y1, x2, y2] = this._convertRect(x, y, w, h);
     options.QuadPoints = [x1, y2, x2, y2, x1, y1, x2, y1];
-    options.Contents = new String();
+    options.Contents = String();
     return this.annotate(x, y, w, h, options);
   }
 
-  highlight(x, y, w, h, options = {}) {
+  highlight(x, y, w, h, options: AnnotateOptions = {}) {
     options.Subtype = 'Highlight';
     if (options.color == null) {
       options.color = [241, 238, 148];
@@ -1353,55 +1406,52 @@ Please pipe the document into a Node stream.\
     return this._markup(x, y, w, h, options);
   }
 
-  underline(x, y, w, h, options = {}) {
+  underline(x, y, w, h, options: AnnotateOptions = {}) {
     options.Subtype = 'Underline';
     return this._markup(x, y, w, h, options);
   }
 
-  strike(x, y, w, h, options = {}) {
+  strike(x, y, w, h, options: AnnotateOptions = {}) {
     options.Subtype = 'StrikeOut';
     return this._markup(x, y, w, h, options);
   }
 
-  lineAnnotation(x1, y1, x2, y2, options = {}) {
+  lineAnnotation(x1, y1, x2, y2, options: AnnotateOptions = {}) {
     options.Subtype = 'Line';
-    options.Contents = new String();
+    options.Contents = String();
     options.L = [x1, this.page.height - y1, x2, this.page.height - y2];
     return this.annotate(x1, y1, x2, y2, options);
   }
 
-  rectAnnotation(x, y, w, h, options = {}) {
+  rectAnnotation(x, y, w, h, options: AnnotateOptions = {}) {
     options.Subtype = 'Square';
-    options.Contents = new String();
+    options.Contents = String();
     return this.annotate(x, y, w, h, options);
   }
 
-  ellipseAnnotation(x, y, w, h, options = {}) {
+  ellipseAnnotation(x, y, w, h, options: AnnotateOptions = {}) {
     options.Subtype = 'Circle';
-    options.Contents = new String();
+    options.Contents = String();
     return this.annotate(x, y, w, h, options);
   }
 
-  textAnnotation(x, y, w, h, text, options = {}) {
+  textAnnotation(x, y, w, h, text, options: AnnotateOptions = {}) {
     options.Subtype = 'FreeText';
-    options.Contents = new String(text);
-    options.DA = new String();
+    options.Contents = String(text);
+    options.DA = String();
     return this.annotate(x, y, w, h, options);
   }
 
-  fileAnnotation(x, y, w, h, file = {}, options = {}) {
+  fileAnnotation(x, y, w, h, file = {}, options: AnnotateOptions = {}) {
     // create hidden file
-    const filespec = this.file(
-        file.src,
-        Object.assign({ hidden: true }, file)
-    );
+    const filespec = this.file(file.src, Object.assign({ hidden: true }, file));
 
     options.Subtype = 'FileAttachment';
     options.FS = filespec;
 
     // add description from filespec unless description (Contents) has already been set
     if (options.Contents) {
-      options.Contents = new String(options.Contents);
+      options.Contents = String(options.Contents);
     } else if (filespec.data.Desc) {
       options.Contents = filespec.data.Desc;
     }
@@ -1409,7 +1459,7 @@ Please pipe the document into a Node stream.\
     return this.annotate(x, y, w, h, options);
   }
 
-  _convertRect(x1, y1, w, h) {
+  _convertRect(x1, y1, w, h): [number, number, number, number] {
     // flip y1 and y2
     let y2 = y1;
     y1 += h;
@@ -1418,7 +1468,7 @@ Please pipe the document into a Node stream.\
     let x2 = x1 + w;
 
     // apply current transformation matrix to points
-    const [m0, m1, m2, m3, m4, m5] = this._ctm;
+    const [m0, m1, m2, m3, m4, m5] = this.ctm;
     x1 = m0 * x1 + m2 * y1 + m4;
     y1 = m1 * x1 + m3 * y1 + m5;
     x2 = m0 * x2 + m2 * y2 + m4;
@@ -1432,8 +1482,9 @@ Please pipe the document into a Node stream.\
 
   /**
    * Embed contents of `src` in PDF
-   * @param {Buffer | ArrayBuffer | string} src input Buffer, ArrayBuffer, base64 encoded string or path to file
-   * @param {object} options
+   *
+   * @param src input Buffer, ArrayBuffer, base64 encoded string or path to file
+   * @param options
    *  * options.name: filename to be shown in PDF, will use `src` if none set
    *  * options.type: filetype to be shown in PDF
    *  * options.description: description to be shown in PDF
@@ -1442,12 +1493,12 @@ Please pipe the document into a Node stream.\
    *  * options.modifiedDate: override modified date
    * @returns filespec reference
    */
-  file(src, options = {}) {
-    options.name = options.name || src;
+  file(src: Buffer | ArrayBuffer | string, options: FileSrcOptions = {}) {
+    options.name = options.name || (src as string);
 
-    const refBody = {
+    const refBody: RefData = {
       Type: 'EmbeddedFile',
-      Params: {}
+      Params: {},
     };
     let data;
 
@@ -1492,16 +1543,18 @@ Please pipe the document into a Node stream.\
 
     // add checksum and size information
     const checksum = CryptoJS.MD5(
-        CryptoJS.lib.WordArray.create(new Uint8Array(data))
+      CryptoJS.lib.WordArray.create(new Uint8Array(data))
     );
-    refBody.Params.CheckSum = new String(checksum);
+    refBody.Params.CheckSum = String(checksum);
     refBody.Params.Size = data.byteLength;
 
     // save some space when embedding the same file again
     // if a file with the same name and metadata exists, reuse its reference
     let ref;
-    if (!this._fileRegistry) this._fileRegistry = {};
-    let file = this._fileRegistry[options.name];
+    if (!this._fileRegistry) {
+      this._fileRegistry = {};
+    }
+    const file = this._fileRegistry[options.name];
     if (file && isEqual(refBody, file)) {
       ref = file.ref;
     } else {
@@ -1511,14 +1564,14 @@ Please pipe the document into a Node stream.\
       this._fileRegistry[options.name] = { ...refBody, ref };
     }
     // add filespec for embedded file
-    const fileSpecBody = {
+    const fileSpecBody: FileSpecRefData = {
       Type: 'Filespec',
-      F: new String(options.name),
+      F: String(options.name),
       EF: { F: ref },
-      UF: new String(options.name)
+      UF: String(options.name),
     };
     if (options.description) {
-      fileSpecBody.Desc = new String(options.description);
+      fileSpecBody.Desc = String(options.description);
     }
     const filespec = this.ref(fileSpecBody);
     filespec.end();
@@ -1550,8 +1603,9 @@ Please pipe the document into a Node stream.\
     }
   }
 
-  font(src, family, size) {
-    let cacheKey, font;
+  font(src: string, family?: string | number, size?: number) {
+    let cacheKey;
+    let font;
     if (typeof family === 'number') {
       size = family;
       family = null;
@@ -1606,7 +1660,7 @@ Please pipe the document into a Node stream.\
     return this;
   }
 
-  currentLineHeight(includeGap) {
+  currentLineHeight(includeGap?: boolean) {
     if (includeGap == null) {
       includeGap = false;
     }
@@ -1616,7 +1670,7 @@ Please pipe the document into a Node stream.\
   registerFont(name, src, family) {
     this._registeredFonts[name] = {
       src,
-      family
+      family,
     };
 
     return this;
@@ -1630,8 +1684,14 @@ Please pipe the document into a Node stream.\
     return (this._imageCount = 0);
   }
 
-  image(src, x, y, options = {}) {
-    let bh, bp, bw, image, ip, left, left1;
+  image(src, x, y, options: ImageOptions = {}) {
+    let bh;
+    let bp;
+    let bw;
+    let image;
+    let ip;
+    let left;
+    let left1;
     if (typeof x === 'object') {
       options = x;
       x = null;
@@ -1755,8 +1815,8 @@ Please pipe the document into a Node stream.\
   // Markings
   // ---------------------------------------------------------
 
-  initMarkings(options) {
-    this.structChildren = [];
+  initMarkings(options: MarkingOptions) {
+    this._structChildren = [];
 
     if (options.tagged) {
       this.getMarkInfoDictionary().data.Marked = true;
@@ -1764,7 +1824,7 @@ Please pipe the document into a Node stream.\
     }
   }
 
-  markContent(tag, options = null) {
+  markContent(tag, options: MarkingOptions = null) {
     if (tag === 'Artifact' || (options && options.mcid)) {
       let toClose = 0;
       this.page.markings.forEach((marking) => {
@@ -1785,7 +1845,16 @@ Please pipe the document into a Node stream.\
 
     this.page.markings.push({ tag, options });
 
-    const dictionary = {};
+    const dictionary: {
+      MCID?: number;
+      BBox?: [number, number, number, number];
+      Type?: string;
+      Attached?: boolean;
+      Lang?: string;
+      Alt?: string;
+      E?: string;
+      ActualText?: string;
+    } = {};
 
     if (typeof options.mcid !== 'undefined') {
       dictionary.MCID = options.mcid;
@@ -1795,26 +1864,32 @@ Please pipe the document into a Node stream.\
         dictionary.Type = options.type;
       }
       if (Array.isArray(options.bbox)) {
-        dictionary.BBox = [options.bbox[0], this.page.height - options.bbox[3],
-          options.bbox[2], this.page.height - options.bbox[1]];
+        dictionary.BBox = [
+          options.bbox[0],
+          this.page.height - options.bbox[3],
+          options.bbox[2],
+          this.page.height - options.bbox[1],
+        ];
       }
-      if (Array.isArray(options.attached) &&
-          options.attached.every(val => typeof val === 'string')) {
+      if (
+        Array.isArray(options.attached) &&
+        options.attached.every((val) => typeof val === 'string')
+      ) {
         dictionary.Attached = options.attached;
       }
     }
     if (tag === 'Span') {
       if (options.lang) {
-        dictionary.Lang = new String(options.lang);
+        dictionary.Lang = String(options.lang);
       }
       if (options.alt) {
-        dictionary.Alt = new String(options.alt);
+        dictionary.Alt = String(options.alt);
       }
       if (options.expanded) {
-        dictionary.E = new String(options.expanded);
+        dictionary.E = String(options.expanded);
       }
       if (options.actual) {
-        dictionary.ActualText = new String(options.actual);
+        dictionary.ActualText = String(options.actual);
       }
     }
 
@@ -1823,7 +1898,9 @@ Please pipe the document into a Node stream.\
   }
 
   markStructureContent(tag, options = {}) {
-    const pageStructParents = this.getStructParentTree().get(this.page.structParentTreeKey);
+    const pageStructParents = this.getStructParentTree().get(
+      this.page.structParentTreeKey
+    );
     const mcid = pageStructParents.length;
     pageStructParents.push(null);
 
@@ -1848,7 +1925,7 @@ Please pipe the document into a Node stream.\
     const structTreeRoot = this.getStructTreeRoot();
     structElem.setParent(structTreeRoot);
     structElem.setAttached();
-    this.structChildren.push(structElem);
+    this._structChildren.push(structElem);
     if (!structTreeRoot.data.K) {
       structTreeRoot.data.K = [];
     }
@@ -1860,7 +1937,10 @@ Please pipe the document into a Node stream.\
     pageMarkings.forEach((marking) => {
       if (marking.structContent) {
         const structContent = marking.structContent;
-        const newStructContent = this.markStructureContent(marking.tag, marking.options);
+        const newStructContent = this.markStructureContent(
+          marking.tag,
+          marking.options
+        );
         structContent.push(newStructContent);
         this.page.markings.slice(-1)[0].structContent = structContent;
       } else {
@@ -1877,21 +1957,21 @@ Please pipe the document into a Node stream.\
   }
 
   getMarkInfoDictionary() {
-    if (!this._root.data.MarkInfo) {
-      this._root.data.MarkInfo = this.ref({});
+    if (!this.root.data.MarkInfo) {
+      this.root.data.MarkInfo = this.ref({});
     }
-    return this._root.data.MarkInfo;
+    return this.root.data.MarkInfo;
   }
 
   getStructTreeRoot() {
-    if (!this._root.data.StructTreeRoot) {
-      this._root.data.StructTreeRoot = this.ref({
+    if (!this.root.data.StructTreeRoot) {
+      this.root.data.StructTreeRoot = this.ref({
         Type: 'StructTreeRoot',
         ParentTree: new PDFNumberTree(),
-        ParentTreeNextKey: 0
+        ParentTreeNextKey: 0,
       });
     }
-    return this._root.data.StructTreeRoot;
+    return this.root.data.StructTreeRoot;
   }
 
   getStructParentTree() {
@@ -1909,13 +1989,13 @@ Please pipe the document into a Node stream.\
   }
 
   endMarkings() {
-    const structTreeRoot = this._root.data.StructTreeRoot;
+    const structTreeRoot = this.root.data.StructTreeRoot;
     if (structTreeRoot) {
       structTreeRoot.end();
-      this.structChildren.forEach((structElem) => structElem.end());
+      this._structChildren.forEach((structElem) => structElem.end());
     }
-    if (this._root.data.MarkInfo) {
-      this._root.data.MarkInfo.end();
+    if (this.root.data.MarkInfo) {
+      this.root.data.MarkInfo.end();
     }
   }
 
@@ -1923,14 +2003,14 @@ Please pipe the document into a Node stream.\
   // ---------------------------------------------------------
 
   initOutline() {
-    return (this.outline = new PDFOutline(this, null, null, null));
+    return (this._outline = new PDFOutline(this, null, null, null));
   }
 
   endOutline() {
-    this.outline.endOutline();
-    if (this.outline.children.length > 0) {
-      this._root.data.Outlines = this.outline.dictionary;
-      return (this._root.data.PageMode = 'UseOutlines');
+    this._outline.endOutline();
+    if (this._outline.children.length > 0) {
+      this.root.data.Outlines = this._outline.dictionary;
+      return (this.root.data.PageMode = 'UseOutlines');
     }
   }
 
@@ -1943,12 +2023,12 @@ Please pipe the document into a Node stream.\
     this.x = 0;
     this.y = 0;
     return (this._lineGap = 0);
-  },
+  }
 
   lineGap(_lineGap) {
     this._lineGap = _lineGap;
     return this;
-  },
+  }
 
   moveDown(lines) {
     if (lines == null) {
@@ -1956,7 +2036,7 @@ Please pipe the document into a Node stream.\
     }
     this.y += this.currentLineHeight(true) * lines + this._lineGap;
     return this;
-  },
+  }
 
   moveUp(lines) {
     if (lines == null) {
@@ -1964,9 +2044,9 @@ Please pipe the document into a Node stream.\
     }
     this.y -= this.currentLineHeight(true) * lines + this._lineGap;
     return this;
-  },
+  }
 
-  _text(text, x, y, options, lineCallback) {
+  _text(text, x, y, options: TextOptions, lineCallback) {
     options = this._initOptions(x, y, options);
 
     // Convert text to a string
@@ -1979,8 +2059,11 @@ Please pipe the document into a Node stream.\
 
     const addStructure = () => {
       if (options.structParent) {
-        options.structParent.add(this.struct(options.structType || 'P',
-            [ this.markStructureContent(options.structType || 'P') ]));
+        options.structParent.add(
+          this.struct(options.structType || 'P', [
+            this.markStructureContent(options.structType || 'P'),
+          ])
+        );
       }
     };
 
@@ -1999,25 +2082,25 @@ Please pipe the document into a Node stream.\
 
       // render paragraphs as single lines
     } else {
-      for (let line of text.split('\n')) {
+      for (const line of text.split('\n')) {
         addStructure();
         lineCallback(line, options);
       }
     }
 
     return this;
-  },
+  }
 
-  text(text, x, y, options) {
+  text(text, x, y, options: TextOptions) {
     return this._text(text, x, y, options, this._line);
-  },
+  }
 
-  widthOfString(string, options = {}) {
+  widthOfString(str, options = {}) {
     return (
-        this._font.widthOfString(string, this._fontSize, options.features) +
-        (options.characterSpacing || 0) * (string.length - 1)
+      this._font.widthOfString(str, this._fontSize, options.features) +
+      (options.characterSpacing || 0) * (str.length - 1)
     );
-  },
+  }
 
   heightOfString(text, options) {
     const { x, y } = this;
@@ -2026,16 +2109,20 @@ Please pipe the document into a Node stream.\
     options.height = Infinity; // don't break pages
 
     const lineGap = options.lineGap || this._lineGap || 0;
-    this._text(text, this.x, this.y, options, () => {
-      return (this.y += this.currentLineHeight(true) + lineGap);
-    });
+    this._text(
+      text,
+      this.x,
+      this.y,
+      options,
+      () => (this.y += this.currentLineHeight(true) + lineGap)
+    );
 
     const height = this.y - y;
     this.x = x;
     this.y = y;
 
     return height;
-  },
+  }
 
   list(list, x, y, options, wrapper) {
     options = this._initOptions(x, y, options);
@@ -2045,16 +2132,16 @@ Please pipe the document into a Node stream.\
     const midLine = unit / 2;
     const r = options.bulletRadius || unit / 3;
     const indent =
-        options.textIndent || (listType === 'bullet' ? r * 5 : unit * 2);
+      options.textIndent || (listType === 'bullet' ? r * 5 : unit * 2);
     const itemIndent =
-        options.bulletIndent || (listType === 'bullet' ? r * 8 : unit * 2);
+      options.bulletIndent || (listType === 'bullet' ? r * 8 : unit * 2);
 
     let level = 1;
     const items = [];
     const levels = [];
     const numbers = [];
 
-    var flatten = function(list) {
+    const flatten = function (list) {
       let n = 1;
       for (let i = 0; i < list.length; i++) {
         const item = list[i];
@@ -2074,14 +2161,14 @@ Please pipe the document into a Node stream.\
 
     flatten(list);
 
-    const label = function(n) {
+    const label = function (n) {
       switch (listType) {
         case 'numbered':
           return `${n}.`;
         case 'lettered':
-          var letter = String.fromCharCode(((n - 1) % 26) + 65);
-          var times = Math.floor((n - 1) / 26 + 1);
-          var text = Array(times + 1).join(letter);
+          const letter = String.fromCharCode(((n - 1) % 26) + 65);
+          const times = Math.floor((n - 1) / 26 + 1);
+          const text = Array(times + 1).join(letter);
           return `${text}.`;
       }
     };
@@ -2092,12 +2179,15 @@ Please pipe the document into a Node stream.\
     level = 1;
     let i = 0;
     wrapper.on('firstLine', () => {
-      let item, itemType, labelType, bodyType;
+      let item;
+      let itemType;
+      let labelType;
+      let bodyType;
       if (options.structParent) {
         if (options.structTypes) {
-          [ itemType, labelType, bodyType ] = options.structTypes;
+          [itemType, labelType, bodyType] = options.structTypes;
         } else {
-          [ itemType, labelType, bodyType ] = [ 'LI', 'Lbl', 'LBody' ];
+          [itemType, labelType, bodyType] = ['LI', 'Lbl', 'LBody'];
         }
       }
 
@@ -2117,8 +2207,11 @@ Please pipe the document into a Node stream.\
       }
 
       if (item && (labelType || bodyType)) {
-        item.add(this.struct(labelType || bodyType,
-            [ this.markStructureContent(labelType || bodyType) ]));
+        item.add(
+          this.struct(labelType || bodyType, [
+            this.markStructureContent(labelType || bodyType),
+          ])
+        );
       }
       switch (listType) {
         case 'bullet':
@@ -2127,13 +2220,13 @@ Please pipe the document into a Node stream.\
           break;
         case 'numbered':
         case 'lettered':
-          var text = label(numbers[i - 1]);
+          const text = label(numbers[i - 1]);
           this._fragment(text, this.x - indent, this.y, options);
           break;
       }
 
       if (item && labelType && bodyType) {
-        item.add(this.struct(bodyType, [ this.markStructureContent(bodyType) ]));
+        item.add(this.struct(bodyType, [this.markStructureContent(bodyType)]));
       }
       if (item && item !== options.structParent) {
         item.end();
@@ -2157,7 +2250,7 @@ Please pipe the document into a Node stream.\
     return this;
   }
 
-  _initOptions(x = {}, y, options = {}) {
+  _initOptions(x: TextOptions | number = {}, y, options: TextOptions = {}) {
     if (typeof x === 'object') {
       options = x;
       x = null;
@@ -2168,7 +2261,7 @@ Please pipe the document into a Node stream.\
 
     // extend options with previous values for continued text
     if (this._textOptions) {
-      for (let key in this._textOptions) {
+      for (const key in this._textOptions) {
         const val = this._textOptions[key];
         if (key !== 'continued') {
           if (result[key] === undefined) {
@@ -2180,7 +2273,7 @@ Please pipe the document into a Node stream.\
 
     // Update the current position
     if (x != null) {
-      this.x = x;
+      this.x = x as number;
     }
     if (y != null) {
       this.y = y;
@@ -2202,9 +2295,9 @@ Please pipe the document into a Node stream.\
     } // 1/4 inch
 
     return result;
-  },
+  }
 
-  _line(text, options = {}, wrapper) {
+  _line(text, options: TextOptions = {}, wrapper) {
     this._fragment(text, this.x, this.y, options);
     const lineGap = options.lineGap || this._lineGap || 0;
 
@@ -2213,10 +2306,15 @@ Please pipe the document into a Node stream.\
     } else {
       return (this.y += this.currentLineHeight(true) + lineGap);
     }
-  },
+  }
 
   _fragment(text, x, y, options) {
-    let dy, encoded, i, positions, textWidth, words;
+    let dy;
+    let encoded;
+    let i;
+    let positions;
+    let textWidth;
+    let words;
     text = `${text}`.replace(/\n/g, '');
     if (text.length === 0) {
       return;
@@ -2243,10 +2341,10 @@ Please pipe the document into a Node stream.\
           // calculate the word spacing value
           words = text.trim().split(/\s+/);
           textWidth = this.widthOfString(text.replace(/\s+/g, ''), options);
-          var spaceWidth = this.widthOfString(' ') + characterSpacing;
+          const spaceWidth = this.widthOfString(' ') + characterSpacing;
           wordSpacing = Math.max(
-              0,
-              (options.lineWidth - textWidth) / Math.max(1, words.length - 1) -
+            0,
+            (options.lineWidth - textWidth) / Math.max(1, words.length - 1) -
               spaceWidth
           );
           break;
@@ -2289,9 +2387,9 @@ Please pipe the document into a Node stream.\
 
     // calculate the actual rendered width of the string after word and character spacing
     const renderedWidth =
-        options.textWidth +
-        wordSpacing * (options.wordCount - 1) +
-        characterSpacing * (text.length - 1);
+      options.textWidth +
+      wordSpacing * (options.wordCount - 1) +
+      characterSpacing * (text.length - 1);
 
     // create link annotations if the link option is given
     if (options.link != null) {
@@ -2308,14 +2406,15 @@ Please pipe the document into a Node stream.\
     if (options.underline) {
       this.save();
       if (!options.stroke) {
-        this.strokeColor(...(this._fillColor || []));
+        const empty: [string, number] = [] as any;
+        this.strokeColor(...(this.filledColor || empty));
       }
 
       const lineWidth =
-          this._fontSize < 10 ? 0.5 : Math.floor(this._fontSize / 10);
+        this._fontSize < 10 ? 0.5 : Math.floor(this._fontSize / 10);
       this.lineWidth(lineWidth);
 
-      let lineY = (y + this.currentLineHeight())  - lineWidth
+      const lineY = y + this.currentLineHeight() - lineWidth;
       this.moveTo(x, lineY);
       this.lineTo(x + renderedWidth, lineY);
       this.stroke();
@@ -2326,14 +2425,15 @@ Please pipe the document into a Node stream.\
     if (options.strike) {
       this.save();
       if (!options.stroke) {
-        this.strokeColor(...(this._fillColor || []));
+        const empty: [string, number] = [] as any;
+        this.strokeColor(...(this.filledColor || empty));
       }
 
       const lineWidth =
-          this._fontSize < 10 ? 0.5 : Math.floor(this._fontSize / 10);
+        this._fontSize < 10 ? 0.5 : Math.floor(this._fontSize / 10);
       this.lineWidth(lineWidth);
 
-      let lineY = y + this.currentLineHeight() / 2;
+      const lineY = y + this.currentLineHeight() / 2;
       this.moveTo(x, lineY);
       this.lineTo(x + renderedWidth, lineY);
       this.stroke();
@@ -2395,21 +2495,20 @@ Please pipe the document into a Node stream.\
 
       encoded = [];
       positions = [];
-      for (let word of words) {
+      for (const word of words) {
         const [encodedWord, positionsWord] = this._font.encode(
-            word,
-            options.features
+          word,
+          options.features
         );
         encoded = encoded.concat(encodedWord);
         positions = positions.concat(positionsWord);
 
         // add the word spacing to the end of the word
         // clone object because of cache
-        const space = {};
+        const space: { xAdvance?: number } = {};
         const object = positions[positions.length - 1];
-        for (let key in object) {
-          const val = object[key];
-          space[key] = val;
+        for (const key in object) {
+          space[key] = object[key];
         }
         space.xAdvance += wordSpacing;
         positions[positions.length - 1] = space;
@@ -2424,11 +2523,11 @@ Please pipe the document into a Node stream.\
     let hadOffset = false;
 
     // Adds a segment of text to the TJ command buffer
-    const addSegment = cur => {
+    const addSegment = (cur) => {
       if (last < cur) {
         const hex = encoded.slice(last, cur).join('');
         const advance =
-            positions[cur - 1].xAdvance - positions[cur - 1].advanceWidth;
+          positions[cur - 1].xAdvance - positions[cur - 1].advanceWidth;
         commands.push(`<${hex}> ${number(-advance)}`);
       }
 
@@ -2436,7 +2535,7 @@ Please pipe the document into a Node stream.\
     };
 
     // Flushes the current TJ commands to the output stream
-    const flush = i => {
+    const flush = (i) => {
       addSegment(i);
 
       if (commands.length > 0) {
@@ -2455,9 +2554,9 @@ Please pipe the document into a Node stream.\
 
         // Move the text position and flush just the current character
         this.addContent(
-            `1 0 0 1 ${number(x + pos.xOffset * scale)} ${number(
-                y + pos.yOffset * scale
-            )} Tm`
+          `1 0 0 1 ${number(x + pos.xOffset * scale)} ${number(
+            y + pos.yOffset * scale
+          )} Tm`
         );
         flush(i + 1);
 
@@ -2488,7 +2587,6 @@ Please pipe the document into a Node stream.\
     return this.restore();
   }
 }
-
 
 // TODO: Rework to actual Mixins
 // const mixin = (methods: any) => {

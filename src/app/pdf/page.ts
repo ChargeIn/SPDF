@@ -72,18 +72,18 @@ export class PDFPage {
   markings: any[];
   margins: PDFMargins;
 
-  private document: PDFDocument;
-  private readonly size: string;
-  private readonly layout: string;
-  private readonly width: number;
-  readonly height: number;
-  private readonly content: PDFReference;
-  private readonly resources: PDFReference;
+  height: number;
+  width: number;
+  private _document: PDFDocument;
+  private readonly _size: string;
+  private readonly _layout: string;
+  private readonly _content: PDFReference;
+  private readonly _resources: PDFReference;
 
   constructor(document: PDFDocument, options: PDFOptions = {}) {
-    this.document = document;
-    this.size = options.size || 'letter';
-    this.layout = options.layout || 'portrait';
+    this._document = document;
+    this._size = options.size || 'letter';
+    this._layout = options.layout || 'portrait';
 
     // process margins
     if (typeof options.margin === 'number') {
@@ -100,26 +100,26 @@ export class PDFPage {
     }
 
     // calculate page dimensions
-    const dimensions = Array.isArray(this.size)
-      ? this.size
-      : SIZES[this.size.toUpperCase()];
-    this.width = dimensions[this.layout === 'portrait' ? 0 : 1];
-    this.height = dimensions[this.layout === 'portrait' ? 1 : 0];
+    const dimensions = Array.isArray(this._size)
+      ? this._size
+      : SIZES[this._size.toUpperCase()];
+    this.width = dimensions[this._layout === 'portrait' ? 0 : 1];
+    this.height = dimensions[this._layout === 'portrait' ? 1 : 0];
 
-    this.content = this.document.ref();
+    this._content = this._document.ref();
 
     // Initialize the Font, XObject, and ExtGState dictionaries
-    this.resources = this.document.ref({
+    this._resources = this._document.ref({
       ProcSet: ['PDF', 'Text', 'ImageB', 'ImageC', 'ImageI'],
     });
 
     // The page dictionary
-    this.dictionary = this.document.ref({
+    this.dictionary = this._document.ref({
       Type: 'Page',
-      Parent: this.document.root.data.Pages,
+      Parent: this._document.root.data.Pages,
       MediaBox: [0, 0, this.width, this.height],
-      Contents: this.content,
-      Resources: this.resources,
+      Contents: this._content,
+      Resources: this._resources,
     });
 
     this.markings = [];
@@ -127,27 +127,27 @@ export class PDFPage {
 
   // Lazily create these objects
   get fonts() {
-    const data = this.resources.data;
+    const data = this._resources.data;
     return data.Font != null ? data.Font : (data.Font = {});
   }
 
   get xobjects() {
-    const data = this.resources.data;
+    const data = this._resources.data;
     return data.XObject != null ? data.XObject : (data.XObject = {});
   }
 
   get ext_gstates() {
-    const data = this.resources.data;
+    const data = this._resources.data;
     return data.ExtGState != null ? data.ExtGState : (data.ExtGState = {});
   }
 
   get patterns() {
-    const data = this.resources.data;
+    const data = this._resources.data;
     return data.Pattern != null ? data.Pattern : (data.Pattern = {});
   }
 
   get colorSpaces() {
-    const data = this.resources.data;
+    const data = this._resources.data;
     return data.ColorSpace || (data.ColorSpace = {});
   }
 
@@ -160,7 +160,7 @@ export class PDFPage {
     const data = this.dictionary.data;
     return data.StructParents != null
       ? data.StructParents
-      : (data.StructParents = this.document.createStructParentTreeNextKey());
+      : (data.StructParents = this._document.createStructParentTreeNextKey());
   }
 
   maxY() {
@@ -168,12 +168,12 @@ export class PDFPage {
   }
 
   write(chunk: any) {
-    return this.content.write(chunk);
+    return this._content.write(chunk);
   }
 
   end() {
     this.dictionary.end();
-    this.resources.end();
-    return this.content.end();
+    this._resources.end();
+    return this._content.end();
   }
 }

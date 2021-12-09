@@ -57,11 +57,6 @@ const STANDARD_FONTS = {
 };
 
 export class StandardFont extends PDFFont {
-  private readonly font: AFMFont;
-  private readonly name: string;
-  private document: PDFDocument;
-  private id: number;
-
   constructor(document: PDFDocument, name: string, id: number) {
     super();
     this.document = document;
@@ -76,6 +71,10 @@ export class StandardFont extends PDFFont {
       xHeight: this.xHeight,
       capHeight: this.capHeight,
     } = this.font);
+  }
+
+  static isStandardFont(name: string) {
+    return name in STANDARD_FONTS;
   }
 
   override embed() {
@@ -119,9 +118,5 @@ export class StandardFont extends PDFFont {
 
     const scale = size / 1000;
     return width * scale;
-  }
-
-  static isStandardFont(name: string) {
-    return name in STANDARD_FONTS;
   }
 }

@@ -4,66 +4,76 @@
  */
 import { PDFFont } from '../font';
 import { PDFDocument } from '../document';
+import { Font } from 'fontkit';
+import { DescFontRefData } from '../types';
 
 const toHex = function (num: number) {
   return `0000${num.toString(16)}`.slice(-4);
 };
 
 export class EmbeddedFont extends PDFFont {
-  constructor(document: PDFDocument, font: string, id: number) {
+  private _subset: any;
+  private readonly _scale: number;
+  private readonly _widths: number[];
+  private readonly _unicode: number[][];
+  private readonly _layoutCache: any;
+  constructor(document: PDFDocument, font: Font, id: string) {
     super();
     this.document = document;
     this.font = font;
     this.id = id;
-    this.subset = this.font.createSubset();
-    this.unicode = [[0]];
-    this.widths = [this.font.getGlyph(0).advanceWidth];
+    // @ts-ignore (Font is more general than TTFFont -> missing create Subset)
+    this._subset = this.font.createSubset();
+    this._unicode = [[0]];
+    // @ts-ignore
+    this._widths = [this.font.getGlyph(0).advanceWidth];
 
     this.name = this.font.postscriptName;
-    this.scale = 1000 / this.font.unitsPerEm;
-    this.ascender = this.font.ascent * this.scale;
-    this.descender = this.font.descent * this.scale;
-    this.xHeight = this.font.xHeight * this.scale;
-    this.capHeight = this.font.capHeight * this.scale;
-    this.lineGap = this.font.lineGap * this.scale;
+    this._scale = 1000 / this.font.unitsPerEm;
+    this.ascender = this.font.ascent * this._scale;
+    this.descender = this.font.descent * this._scale;
+    this.xHeight = this.font.xHeight * this._scale;
+    this.capHeight = this.font.capHeight * this._scale;
+    this.lineGap = this.font.lineGap * this._scale;
     this.bbox = this.font.bbox;
 
     if (document.options.fontLayoutCache !== false) {
-      this.layoutCache = Object.create(null);
+      this._layoutCache = Object.create(null);
     }
   }
 
-  layoutRun(text: string, features) {
+  layoutRun(text: string, features?: string[]) {
     const run = this.font.layout(text, features);
 
     // Normalize position values
     for (let i = 0; i < run.positions.length; i++) {
       const position = run.positions[i];
-      for (let key in position) {
-        position[key] *= this.scale;
+      for (const key in position) {
+        position[key] *= this._scale;
       }
 
-      position.advanceWidth = run.glyphs[i].advanceWidth * this.scale;
+      // @ts-ignore
+      position.advanceWidth = run.glyphs[i].advanceWidth * this._scale;
     }
 
     return run;
   }
 
   layoutCached(text) {
-    if (!this.layoutCache) {
+    if (!this._layoutCache) {
       return this.layoutRun(text);
     }
     let cached;
-    if ((cached = this.layoutCache[text])) {
+    if ((cached = this._layoutCache[text])) {
       return cached;
     }
 
     const run = this.layoutRun(text);
-    this.layoutCache[text] = run;
+    this._layoutCache[text] = run;
     return run;
   }
 
-  layout(text, features, onlyWidth) {
+  layout(text, features, onlyWidth?: boolean) {
     // Skip the cache if any user defined features are applied
     if (features) {
       return this.layoutRun(text, features);
@@ -74,11 +84,11 @@ export class EmbeddedFont extends PDFFont {
     let advanceWidth = 0;
 
     // Split the string by words to increase cache efficiency.
-    // For this purpose, spaces and tabs are a good enough delimeter.
+    // For this purpose, spaces and tabs are a good enough delimiter.
     let last = 0;
     let index = 0;
     while (index <= text.length) {
-      var needle;
+      let needle;
       if (
         (index === text.length && last < index) ||
         ((needle = text.charAt(index)), [' ', '\t'].includes(needle))
@@ -99,41 +109,41 @@ export class EmbeddedFont extends PDFFont {
     return { glyphs, positions, advanceWidth };
   }
 
-  encode(text, features) {
+  encode(text: string, features?: string[]) {
     const { glyphs, positions } = this.layout(text, features);
 
-    const res = [];
+    const res: string[] = [];
     for (let i = 0; i < glyphs.length; i++) {
       const glyph = glyphs[i];
-      const gid = this.subset.includeGlyph(glyph.id);
+      const gid = this._subset.includeGlyph(glyph.id);
       res.push(`0000${gid.toString(16)}`.slice(-4));
 
-      if (this.widths[gid] == null) {
-        this.widths[gid] = glyph.advanceWidth * this.scale;
+      if (this._widths[gid] == null) {
+        this._widths[gid] = glyph.advanceWidth * this._scale;
       }
-      if (this.unicode[gid] == null) {
-        this.unicode[gid] = glyph.codePoints;
+      if (this._unicode[gid] == null) {
+        this._unicode[gid] = glyph.codePoints;
       }
     }
 
     return [res, positions];
   }
 
-  widthOfString(string, size, features) {
-    const width = this.layout(string, features, true).advanceWidth;
+  widthOfString(str, size, features) {
+    const width = this.layout(str, features, true).advanceWidth;
     const scale = size / 1000;
     return width * scale;
   }
 
   embed() {
-    const isCFF = this.subset.cff != null;
+    const isCFF = this._subset.cff != null;
     const fontFile = this.document.ref();
 
     if (isCFF) {
       fontFile.data.Subtype = 'CIDFontType0C';
     }
 
-    this.subset
+    this._subset
       .encodeStream()
       .on('data', (data) => fontFile.write(data))
       .on('end', () => fontFile.end());
@@ -143,6 +153,7 @@ export class EmbeddedFont extends PDFFont {
         ? this.font['OS/2'].sFamilyClass
         : undefined) || 0) >> 8;
     let flags = 0;
+    // @ts-ignore
     if (this.font.post.isFixedPitch) {
       flags |= 1 << 0;
     }
@@ -153,6 +164,7 @@ export class EmbeddedFont extends PDFFont {
     if (familyClass === 10) {
       flags |= 1 << 3;
     }
+    // @ts-ignore
     if (this.font.head.macStyle.italic) {
       flags |= 1 << 6;
     }
@@ -169,16 +181,16 @@ export class EmbeddedFont extends PDFFont {
       FontName: name,
       Flags: flags,
       FontBBox: [
-        bbox.minX * this.scale,
-        bbox.minY * this.scale,
-        bbox.maxX * this.scale,
-        bbox.maxY * this.scale,
+        bbox.minX * this._scale,
+        bbox.minY * this._scale,
+        bbox.maxX * this._scale,
+        bbox.maxY * this._scale,
       ],
       ItalicAngle: this.font.italicAngle,
       Ascent: this.ascender,
       Descent: this.descender,
-      CapHeight: (this.font.capHeight || this.font.ascent) * this.scale,
-      XHeight: (this.font.xHeight || 0) * this.scale,
+      CapHeight: (this.font.capHeight || this.font.ascent) * this._scale,
+      XHeight: (this.font.xHeight || 0) * this._scale,
       StemV: 0,
     }); // not sure how to calculate this
 
@@ -190,17 +202,17 @@ export class EmbeddedFont extends PDFFont {
 
     descriptor.end();
 
-    const descendantFontData = {
+    const descendantFontData: DescFontRefData = {
       Type: 'Font',
       Subtype: 'CIDFontType0',
       BaseFont: name,
       CIDSystemInfo: {
-        Registry: new String('Adobe'),
-        Ordering: new String('Identity'),
+        Registry: String('Adobe'),
+        Ordering: String('Identity'),
         Supplement: 0,
       },
       FontDescriptor: descriptor,
-      W: [0, this.widths],
+      W: [0, this._widths],
     };
 
     if (!isCFF) {
@@ -231,7 +243,7 @@ export class EmbeddedFont extends PDFFont {
     const cmap = this.document.ref();
 
     const entries = [];
-    for (let codePoints of this.unicode) {
+    for (const codePoints of this._unicode) {
       const encoded = [];
 
       // encode codePoints to utf16

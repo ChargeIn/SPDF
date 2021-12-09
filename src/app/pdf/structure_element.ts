@@ -4,19 +4,40 @@
  * Translated to ts by Florian Plesker
  */
 
+import { PDFDocument } from './document';
+import { PDFReference } from './reference';
+import { PDFStructureContent } from './structure_content';
+
 export class PDFStructureElement {
-  constructor(document, type, options = {}, children = null) {
-    this.document = document;
+  private _document: PDFDocument;
+  private _attached: boolean;
+  private _ended: boolean;
+  private _flushed: boolean;
+  private readonly _dictionary: PDFReference;
+  private _children: any;
+  constructor(
+    document,
+    type,
+    options: {
+      title?: string;
+      lang?: any;
+      alt?: any;
+      expanded?: boolean;
+      actual?: any;
+    } = {},
+    children = null
+  ) {
+    this._document = document;
 
     this._attached = false;
     this._ended = false;
     this._flushed = false;
-    this.dictionary = document.ref({
+    this._dictionary = document.ref({
       // Type: "StructElem",
       S: type,
     });
 
-    const data = this.dictionary.data;
+    const data = this._dictionary.data;
 
     if (Array.isArray(options) || this._isValidChild(options)) {
       children = options;
@@ -24,19 +45,19 @@ export class PDFStructureElement {
     }
 
     if (typeof options.title !== 'undefined') {
-      data.T = new String(options.title);
+      data.T = String(options.title);
     }
     if (typeof options.lang !== 'undefined') {
-      data.Lang = new String(options.lang);
+      data.Lang = String(options.lang);
     }
     if (typeof options.alt !== 'undefined') {
-      data.Alt = new String(options.alt);
+      data.Alt = String(options.alt);
     }
     if (typeof options.expanded !== 'undefined') {
-      data.E = new String(options.expanded);
+      data.E = String(options.expanded);
     }
     if (typeof options.actual !== 'undefined') {
-      data.ActualText = new String(options.actual);
+      data.ActualText = String(options.actual);
     }
 
     this._children = [];
@@ -60,7 +81,7 @@ export class PDFStructureElement {
     }
 
     if (child instanceof PDFStructureElement) {
-      child.setParent(this.dictionary);
+      child.setParent(this._dictionary);
       if (this._attached) {
         child.setAttached();
       }
@@ -82,19 +103,19 @@ export class PDFStructureElement {
 
   _addContentToParentTree(content) {
     content.refs.forEach(({ pageRef, mcid }) => {
-      const pageStructParents = this.document
+      const pageStructParents = this._document
         .getStructParentTree()
         .get(pageRef.data.StructParents);
-      pageStructParents[mcid] = this.dictionary;
+      pageStructParents[mcid] = this._dictionary;
     });
   }
 
   setParent(parentRef) {
-    if (this.dictionary.data.P) {
+    if (this._dictionary.data.P) {
       throw new Error(`Structure element added to more than one parent`);
     }
 
-    this.dictionary.data.P = parentRef;
+    this._dictionary.data.P = parentRef;
 
     this._flush();
   }
@@ -141,9 +162,11 @@ export class PDFStructureElement {
   }
 
   _contentForClosure(closure) {
-    const content = this.document.markStructureContent(this.dictionary.data.S);
+    const content = this._document.markStructureContent(
+      this._dictionary.data.S
+    );
     closure();
-    this.document.endMarkedContent();
+    this._document.endMarkedContent();
 
     this._addContentToParentTree(content);
 
@@ -151,7 +174,7 @@ export class PDFStructureElement {
   }
 
   _isFlushable() {
-    if (!this.dictionary.data.P || !this._ended) {
+    if (!this._dictionary.data.P || !this._ended) {
       return false;
     }
 
@@ -171,36 +194,36 @@ export class PDFStructureElement {
       return;
     }
 
-    this.dictionary.data.K = [];
+    this._dictionary.data.K = [];
 
     this._children.forEach((child) => this._flushChild(child));
 
-    this.dictionary.end();
+    this._dictionary.end();
 
     // free memory used by children; the dictionary itself may still be
     // referenced by a parent structure element or root, but we can
     // at least trim the tree here
     this._children = [];
-    this.dictionary.data.K = null;
+    this._dictionary.data.K = null;
 
     this._flushed = true;
   }
 
   _flushChild(child) {
     if (child instanceof PDFStructureElement) {
-      this.dictionary.data.K.push(child.dictionary);
+      this._dictionary.data.K.push(child._dictionary);
     }
 
     if (child instanceof PDFStructureContent) {
       child.refs.forEach(({ pageRef, mcid }) => {
-        if (!this.dictionary.data.Pg) {
-          this.dictionary.data.Pg = pageRef;
+        if (!this._dictionary.data.Pg) {
+          this._dictionary.data.Pg = pageRef;
         }
 
-        if (this.dictionary.data.Pg === pageRef) {
-          this.dictionary.data.K.push(mcid);
+        if (this._dictionary.data.Pg === pageRef) {
+          this._dictionary.data.K.push(mcid);
         } else {
-          this.dictionary.data.K.push({
+          this._dictionary.data.K.push({
             Type: 'MCR',
             Pg: pageRef,
             MCID: mcid,

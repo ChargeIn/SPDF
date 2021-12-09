@@ -2,34 +2,51 @@
  * Original PDFKit - outline.js
  * Translated to ts by Florian Plesker
  */
+import { PDFDocument } from './document';
+import { PDFReference } from './reference';
+
 export class PDFOutline {
+  dictionary: PDFReference;
+  children: PDFOutline[];
+  private readonly _document: PDFDocument;
+  private _options: { expanded: boolean };
+  private readonly _outlineData: {
+    Dest?: any[];
+    Parent?: PDFReference;
+    Title?: string;
+    First?: PDFReference;
+    Last?: PDFReference;
+    Count?: number;
+    Prev?: PDFReference;
+    Next?: PDFReference;
+  };
   constructor(document, parent, title, dest, options = { expanded: false }) {
-    this.document = document;
-    this.options = options;
-    this.outlineData = {};
+    this._document = document;
+    this._options = options;
+    this._outlineData = {};
 
     if (dest !== null) {
-      this.outlineData['Dest'] = [dest.dictionary, 'Fit'];
+      this._outlineData.Dest = [dest._dictionary, 'Fit'];
     }
 
     if (parent !== null) {
-      this.outlineData['Parent'] = parent;
+      this._outlineData.Parent = parent;
     }
 
     if (title !== null) {
-      this.outlineData['Title'] = String(title);
+      this._outlineData.Title = String(title);
     }
 
-    this.dictionary = this.document.ref(this.outlineData);
+    this.dictionary = this._document.ref(this._outlineData);
     this.children = [];
   }
 
   addItem(title, options = { expanded: false }) {
     const result = new PDFOutline(
-      this.document,
+      this._document,
       this.dictionary,
       title,
-      this.document.page,
+      this._document.page,
       options
     );
     this.children.push(result);
@@ -39,22 +56,22 @@ export class PDFOutline {
 
   endOutline() {
     if (this.children.length > 0) {
-      if (this.options.expanded) {
-        this.outlineData.Count = this.children.length;
+      if (this._options.expanded) {
+        this._outlineData.Count = this.children.length;
       }
 
-      const first = this.children[0],
-        last = this.children[this.children.length - 1];
-      this.outlineData.First = first.dictionary;
-      this.outlineData.Last = last.dictionary;
+      const first = this.children[0];
+      const last = this.children[this.children.length - 1];
+      this._outlineData.First = first.dictionary;
+      this._outlineData.Last = last.dictionary;
 
       for (let i = 0, len = this.children.length; i < len; i++) {
         const child = this.children[i];
         if (i > 0) {
-          child.outlineData.Prev = this.children[i - 1].dictionary;
+          child._outlineData.Prev = this.children[i - 1].dictionary;
         }
         if (i < this.children.length - 1) {
-          child.outlineData.Next = this.children[i + 1].dictionary;
+          child._outlineData.Next = this.children[i + 1].dictionary;
         }
         child.endOutline();
       }

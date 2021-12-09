@@ -1,11 +1,14 @@
 /**
  * Check if value is in a range group.
- * @param {number} value
- * @param {number[]} rangeGroup
- * @returns {boolean}
+ *
+ * @param value
+ * @param rangeGroup
+ * @returns
  */
 export function inRange(value: number, rangeGroup: number[]) {
-  if (value < rangeGroup[0]) return false;
+  if (value < rangeGroup[0]) {
+    return false;
+  }
   let startRange = 0;
   let endRange = rangeGroup.length / 2;
   while (startRange <= endRange) {

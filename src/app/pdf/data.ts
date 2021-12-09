@@ -3,26 +3,26 @@
  * Translated to ts by Florian Plesker
  */
 export class Data {
-  private readonly data: any[];
-  private pos: number;
-  private length: number;
+  private readonly _data: any[];
+  private _pos: number;
+  private _length: number;
 
   constructor(data = []) {
-    this.data = data;
-    this.pos = 0;
-    this.length = this.data.length;
+    this._data = data;
+    this._pos = 0;
+    this._length = this._data.length;
   }
 
   readByte() {
-    return this.data[this.pos++];
+    return this._data[this._pos++];
   }
 
   writeByte(byte) {
-    return (this.data[this.pos++] = byte);
+    return (this._data[this._pos++] = byte);
   }
 
   byteAt(index) {
-    return this.data[index];
+    return this._data[index];
   }
 
   readBool() {
@@ -103,14 +103,14 @@ export class Data {
   writeString(val) {
     // todo: remove returning data. Seems not used
     const result = [];
-    for (let i = 0; i <= val.length; i++) {
+    for (let i = 0; i <= val._length; i++) {
       result.push(this.writeByte(val.charCodeAt(i)));
     }
     return result;
   }
 
   stringAt(pos, length) {
-    this.pos = pos;
+    this._pos = pos;
     return this.readString(length);
   }
 
@@ -182,7 +182,7 @@ export class Data {
   }
 
   slice(start, end) {
-    return this.data.slice(start, end);
+    return this._data.slice(start, end);
   }
 
   read(bytes) {

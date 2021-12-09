@@ -2,23 +2,31 @@
  * Original PDFKit - font.js/font_factory.js
  * Translated to ts by Florian Plesker
  */
-import fs from 'fs';
-import fontkit from 'fontkit';
+import * as fs from 'fs';
+import fontkit, { BBOX, Font } from 'fontkit';
 import { PDFReference } from './reference';
 import { PDFDocument } from './document';
 import { StandardFont } from './font/standard';
 import { EmbeddedFont } from './font/embedded';
 
 export class PDFFont {
-  private dictionary: PDFReference;
-  private document: PDFDocument;
-  private embedded: boolean;
-  private lineGap: number;
-  private ascender: number;
-  private descender: number;
+  ascender: number;
+  descender: number;
+  id: string;
+  name: string;
+  xHeight: number;
+  lineGap: number;
+  capHeight: number;
+  dictionary: PDFReference;
+  protected bbox: BBOX;
+  protected font: Font;
+  protected document: PDFDocument;
+  private _document: PDFDocument;
+  private _embedded: boolean;
+  private _lineGap: number;
   constructor() {}
 
-  encode() {
+  encode(text: string, features?: string[]) {
     throw new Error('Must be implemented by subclasses');
   }
 
@@ -29,16 +37,16 @@ export class PDFFont {
   ref() {
     return this.dictionary != null
       ? this.dictionary
-      : (this.dictionary = this.document.ref());
+      : (this.dictionary = this._document.ref());
   }
 
   finalize() {
-    if (this.embedded || this.dictionary == null) {
+    if (this._embedded || this.dictionary == null) {
       return;
     }
 
     this.embed();
-    return (this.embedded = true);
+    return (this._embedded = true);
   }
 
   embed() {
@@ -49,14 +57,14 @@ export class PDFFont {
     if (includeGap == null) {
       includeGap = false;
     }
-    const gap = includeGap ? this.lineGap : 0;
+    const gap = includeGap ? this._lineGap : 0;
     return ((this.ascender + gap - this.descender) / 1000) * size;
   }
 }
 
 export class PDFFontFactory {
   static open(document, src, family, id) {
-    let font;
+    let font: Font;
     if (typeof src === 'string') {
       if (StandardFont.isStandardFont(src)) {
         return new StandardFont(document, src, id);

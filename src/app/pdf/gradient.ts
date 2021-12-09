@@ -6,44 +6,44 @@ import { PDFReference } from './reference';
 import { PDFObject } from './object';
 
 export abstract class PDFGradient {
-  protected doc: any;
-  private readonly stops: [number, number[] | string, number][];
-  private embedded: boolean;
-  private transform: number[];
-  protected _colorSpace = '';
-  private matrix: number[] = [];
-  private id = '';
+  protected doc: PDFDocument;
+  protected colorSpace = '';
+  private readonly _stops: [number, number[] | string, number][];
+  private _embedded: boolean;
+  private _transform: number[];
+  private _matrix: number[] = [];
+  private _id = '';
 
-  constructor(doc: any) {
+  protected constructor(doc: any) {
     this.doc = doc;
-    this.stops = [];
-    this.embedded = false;
-    this.transform = [1, 0, 0, 0, 0];
+    this._stops = [];
+    this._embedded = false;
+    this._transform = [1, 0, 0, 0, 0];
   }
 
   stop(pos: number, color: number[] | string, opacity = 1) {
-    color = this.doc._normalizeColor(color);
+    color = this.doc.normalizeColor(color);
 
-    if (this.stops.length === 0) {
+    if (this._stops.length === 0) {
       if (color.length === 3) {
-        this._colorSpace = 'DeviceRGB';
+        this.colorSpace = 'DeviceRGB';
       } else if (color.length === 4) {
-        this._colorSpace = 'DeviceCMYK';
+        this.colorSpace = 'DeviceCMYK';
       } else if (color.length === 1) {
-        this._colorSpace = 'DeviceGray';
+        this.colorSpace = 'DeviceGray';
       } else {
         throw new Error('Unknown color space');
       }
     } else if (
-      (this._colorSpace === 'DeviceRGB' && color.length !== 3) ||
-      (this._colorSpace === 'DeviceCMYK' && color.length !== 4) ||
-      (this._colorSpace === 'DeviceGray' && color.length !== 1)
+      (this.colorSpace === 'DeviceRGB' && color.length !== 3) ||
+      (this.colorSpace === 'DeviceCMYK' && color.length !== 4) ||
+      (this.colorSpace === 'DeviceGray' && color.length !== 1)
     ) {
       throw new Error('All gradient stops must use the same color space');
     }
 
     opacity = Math.max(0, Math.min(1, opacity));
-    this.stops.push([pos, color, opacity]);
+    this._stops.push([pos, color, opacity]);
     return this;
   }
 
@@ -55,23 +55,23 @@ export abstract class PDFGradient {
     dx: number,
     dy: number
   ) {
-    this.transform = [m11, m12, m21, m22, dx, dy];
+    this._transform = [m11, m12, m21, m22, dx, dy];
     return this;
   }
 
   embed(m: number[]) {
     let fn;
-    const stopsLength = this.stops.length;
+    const stopsLength = this._stops.length;
     if (stopsLength === 0) {
       return;
     }
-    this.embedded = true;
-    this.matrix = m;
+    this._embedded = true;
+    this._matrix = m;
 
     // if the last stop comes before 100%, add a copy at 100%
-    const last = this.stops[stopsLength - 1];
+    const last = this._stops[stopsLength - 1];
     if (last[0] < 1) {
-      this.stops.push([1, last[1], last[2]]);
+      this._stops.push([1, last[1], last[2]]);
     }
 
     const bounds = [];
@@ -81,14 +81,14 @@ export abstract class PDFGradient {
     for (let i = 0; i < stopsLength - 1; i++) {
       encode.push(0, 1);
       if (i + 2 !== stopsLength) {
-        bounds.push(this.stops[i + 1][0]);
+        bounds.push(this._stops[i + 1][0]);
       }
 
       fn = this.doc.ref({
         FunctionType: 2,
         Domain: [0, 1],
-        C0: this.stops[i + 0][1],
-        C1: this.stops[i + 1][1],
+        C0: this._stops[i + 0][1],
+        C1: this._stops[i + 1][1],
         N: 1,
       });
 
@@ -111,7 +111,7 @@ export abstract class PDFGradient {
       fn.end();
     }
 
-    this.id = `Sh${++this.doc._gradCount}`;
+    this._id = `Sh${++this.doc.gradCount}`;
 
     const shader = this.shader(fn);
     shader.end();
@@ -120,20 +120,20 @@ export abstract class PDFGradient {
       Type: 'Pattern',
       PatternType: 2,
       Shading: shader,
-      Matrix: this.matrix.map(PDFObject.number),
+      Matrix: this._matrix.map(PDFObject.number),
     });
 
     pattern.end();
 
-    if (this.stops.some((stop) => stop[2] < 1)) {
+    if (this._stops.some((stop) => stop[2] < 1)) {
       let grad = this.opacityGradient();
-      grad._colorSpace = 'DeviceGray';
+      grad.colorSpace = 'DeviceGray';
 
-      for (let stop of this.stops) {
+      for (const stop of this._stops) {
         grad.stop(stop[0], [stop[2]]);
       }
 
-      grad = grad.embed(this.matrix);
+      grad = grad.embed(this._matrix);
 
       const pageBBox = [0, 0, this.doc.page.width, this.doc.page.height];
 
@@ -191,9 +191,9 @@ export abstract class PDFGradient {
       opacityPattern.write('/Gs1 gs /Pattern cs /Sh1 scn');
       opacityPattern.end(`${pageBBox.join(' ')} re f`);
 
-      this.doc.page.patterns[this.id] = opacityPattern;
+      this.doc.page.patterns[this._id] = opacityPattern;
     } else {
-      this.doc.page.patterns[this.id] = pattern;
+      this.doc.page.patterns[this._id] = pattern;
     }
 
     return pattern;
@@ -201,8 +201,8 @@ export abstract class PDFGradient {
 
   apply(stroke: boolean) {
     // apply gradient transform to existing document ctm
-    const [m0, m1, m2, m3, m4, m5] = this.doc._ctm;
-    const [m11, m12, m21, m22, dx, dy] = this.transform;
+    const [m0, m1, m2, m3, m4, m5] = this.doc.ctm;
+    const [m11, m12, m21, m22, dx, dy] = this._transform;
     const m = [
       m0 * m11 + m2 * m12,
       m1 * m11 + m3 * m12,
@@ -212,24 +212,24 @@ export abstract class PDFGradient {
       m1 * dx + m3 * dy + m5,
     ];
 
-    if (!this.embedded || m.join(' ') !== this.matrix.join(' ')) {
+    if (!this._embedded || m.join(' ') !== this._matrix.join(' ')) {
       this.embed(m);
     }
-    this.doc._setColorSpace('Pattern', stroke);
+    this.doc.setColorSpace('Pattern', stroke);
     const op = stroke ? 'SCN' : 'scn';
-    return this.doc.addContent(`/${this.id} ${op}`);
+    return this.doc.addContent(`/${this._id} ${op}`);
   }
 
-  abstract shader(fn: () => {}): PDFReference;
+  abstract shader(fn: () => any): PDFReference;
 
   abstract opacityGradient(): PDFGradient;
 }
 
-class PDFLinearGradient extends PDFGradient {
-  private readonly x1: number;
-  private readonly y1: number;
-  private readonly x2: number;
-  private readonly y2: number;
+export class PDFLinearGradient extends PDFGradient {
+  private readonly _x1: number;
+  private readonly _y1: number;
+  private readonly _x2: number;
+  private readonly _y2: number;
 
   constructor(
     doc: PDFDocument,
@@ -239,34 +239,40 @@ class PDFLinearGradient extends PDFGradient {
     y2: number
   ) {
     super(doc);
-    this.x1 = x1;
-    this.y1 = y1;
-    this.x2 = x2;
-    this.y2 = y2;
+    this._x1 = x1;
+    this._y1 = y1;
+    this._x2 = x2;
+    this._y2 = y2;
   }
 
-  shader(fn: () => {}) {
+  shader(fn: () => any) {
     return this.doc.ref({
       ShadingType: 2,
-      ColorSpace: this._colorSpace,
-      Coords: [this.x1, this.y1, this.x2, this.y2],
+      ColorSpace: this.colorSpace,
+      Coords: [this._x1, this._y1, this._x2, this._y2],
       Function: fn,
       Extend: [true, true],
     });
   }
 
   opacityGradient() {
-    return new PDFLinearGradient(this.doc, this.x1, this.y1, this.x2, this.y2);
+    return new PDFLinearGradient(
+      this.doc,
+      this._x1,
+      this._y1,
+      this._x2,
+      this._y2
+    );
   }
 }
 
-class PDFRadialGradient extends PDFGradient {
-  private readonly x1: number;
-  private readonly y1: number;
-  private readonly x2: number;
-  private readonly y2: number;
-  private readonly r1: number;
-  private readonly r2: number;
+export class PDFRadialGradient extends PDFGradient {
+  private readonly _x1: number;
+  private readonly _y1: number;
+  private readonly _x2: number;
+  private readonly _y2: number;
+  private readonly _r1: number;
+  private readonly _r2: number;
 
   constructor(
     doc: PDFDocument,
@@ -279,19 +285,19 @@ class PDFRadialGradient extends PDFGradient {
   ) {
     super(doc);
     this.doc = doc;
-    this.x1 = x1;
-    this.y1 = y1;
-    this.r1 = r1;
-    this.x2 = x2;
-    this.y2 = y2;
-    this.r2 = r2;
+    this._x1 = x1;
+    this._y1 = y1;
+    this._r1 = r1;
+    this._x2 = x2;
+    this._y2 = y2;
+    this._r2 = r2;
   }
 
-  shader(fn: () => {}) {
+  shader(fn: () => any) {
     return this.doc.ref({
       ShadingType: 3,
-      ColorSpace: this._colorSpace,
-      Coords: [this.x1, this.y1, this.r1, this.x2, this.y2, this.r2],
+      ColorSpace: this.colorSpace,
+      Coords: [this._x1, this._y1, this._r1, this._x2, this._y2, this._r2],
       Function: fn,
       Extend: [true, true],
     });
@@ -300,12 +306,12 @@ class PDFRadialGradient extends PDFGradient {
   opacityGradient() {
     return new PDFRadialGradient(
       this.doc,
-      this.x1,
-      this.y1,
-      this.r1,
-      this.x2,
-      this.y2,
-      this.r2
+      this._x1,
+      this._y1,
+      this._r1,
+      this._x2,
+      this._y2,
+      this._r2
     );
   }
 }

@@ -109,38 +109,58 @@ udieresis     yacute         thorn          ydieresis\
 `.split(/\s+/);
 
 export class AFMFont {
-  static open(filename: string) {
-    return new AFMFont(fs.readFileSync(filename, 'utf8'));
-  }
+  bbox: number[];
+  ascender: number;
+  descender: number;
+  xHeight: number;
+  capHeight: number;
+  lineGap: number;
+
+  private _contents: string;
+  private _attributes: {
+    FontBBox?: string;
+    Ascender?: number;
+    Descender?: number;
+    XHeight?: number;
+    CapHeight?: number;
+  };
+  private _glyphWidths: { [key: string]: number };
+  private _boundingBoxes: { [key: string]: number };
+  private _kernPairs: { [key: string]: number };
+  private _charWidths: number[];
 
   constructor(contents) {
-    this.contents = contents;
-    this.attributes = {};
-    this.glyphWidths = {};
-    this.boundingBoxes = {};
-    this.kernPairs = {};
+    this._contents = contents;
+    this._attributes = {};
+    this._glyphWidths = {};
+    this._boundingBoxes = {};
+    this._kernPairs = {};
 
     this.parse();
     // todo: remove charWidths since appears to not be used
-    this.charWidths = new Array(256);
+    this._charWidths = new Array(256);
     for (let char = 0; char <= 255; char++) {
-      this.charWidths[char] = this.glyphWidths[characters[char]];
+      this._charWidths[char] = this._glyphWidths[characters[char]];
     }
 
-    this.bbox = this.attributes['FontBBox'].split(/\s+/).map((e) => +e);
-    this.ascender = +(this.attributes['Ascender'] || 0);
-    this.descender = +(this.attributes['Descender'] || 0);
-    this.xHeight = +(this.attributes['XHeight'] || 0);
-    this.capHeight = +(this.attributes['CapHeight'] || 0);
+    this.bbox = this._attributes.FontBBox.split(/\s+/).map((e) => +e);
+    this.ascender = +(this._attributes.Ascender || 0);
+    this.descender = +(this._attributes.Descender || 0);
+    this.xHeight = +(this._attributes.XHeight || 0);
+    this.capHeight = +(this._attributes.CapHeight || 0);
     this.lineGap =
       this.bbox[3] - this.bbox[1] - (this.ascender - this.descender);
   }
 
+  static open(filename: string) {
+    return new AFMFont(fs.readFileSync(filename, 'utf8'));
+  }
+
   parse() {
     let section = '';
-    for (let line of this.contents.split('\n')) {
-      var match;
-      var a;
+    for (const line of this._contents.split('\n')) {
+      let match;
+      let a;
       if ((match = line.match(/^Start(\w+)/))) {
         section = match[1];
         continue;
@@ -152,16 +172,16 @@ export class AFMFont {
       switch (section) {
         case 'FontMetrics':
           match = line.match(/(^\w+)\s+(.*)/);
-          var key = match[1];
-          var value = match[2];
+          const key = match[1];
+          const value = match[2];
 
-          if ((a = this.attributes[key])) {
+          if ((a = this._attributes[key])) {
             if (!Array.isArray(a)) {
-              a = this.attributes[key] = [a];
+              a = this._attributes[key] = [a];
             }
             a.push(value);
           } else {
-            this.attributes[key] = value;
+            this._attributes[key] = value;
           }
           break;
 
@@ -169,14 +189,14 @@ export class AFMFont {
           if (!/^CH?\s/.test(line)) {
             continue;
           }
-          var name = line.match(/\bN\s+(\.?\w+)\s*;/)[1];
-          this.glyphWidths[name] = +line.match(/\bWX\s+(\d+)\s*;/)[1];
+          const name = line.match(/\bN\s+(\.?\w+)\s*;/)[1];
+          this._glyphWidths[name] = +line.match(/\bWX\s+(\d+)\s*;/)[1];
           break;
 
         case 'KernPairs':
           match = line.match(/^KPX\s+(\.?\w+)\s+(\.?\w+)\s+(-?\d+)/);
           if (match) {
-            this.kernPairs[match[1] + '\0' + match[2]] = parseInt(match[3]);
+            this._kernPairs[match[1] + '\0' + match[2]] = parseInt(match[3]);
           }
           break;
       }
@@ -194,11 +214,11 @@ export class AFMFont {
     return res;
   }
 
-  glyphsForString(string: string) {
+  glyphsForString(str: string) {
     const glyphs = [];
 
-    for (let i = 0, len = string.length; i < len; i++) {
-      const charCode = string.charCodeAt(i);
+    for (let i = 0, len = str.length; i < len; i++) {
+      const charCode = str.charCodeAt(i);
       glyphs.push(this.characterToGlyph(charCode));
     }
 
@@ -210,11 +230,11 @@ export class AFMFont {
   }
 
   widthOfGlyph(glyph) {
-    return this.glyphWidths[glyph] || 0;
+    return this._glyphWidths[glyph] || 0;
   }
 
   getKernPair(left, right) {
-    return this.kernPairs[left + '\0' + right] || 0;
+    return this._kernPairs[left + '\0' + right] || 0;
   }
 
   advancesForGlyphs(glyphs) {

@@ -39,11 +39,12 @@
     "@angular/platform-browser": "13.0.2",
     "@angular/platform-browser-dynamic": "13.0.2",
     "@angular/router": "13.0.2",
+    "crypto-js": "^4.1.1",
+    "fontkit": "^1.8.1",
+    "linebreak": "^1.0.2",
     "rxjs": "7.4.0",
     "tslib": "^2.1.0",
-    "zone.js": "~0.11.4",
-    "fontkit": "^1.8.1",
-    "crypto-js": "^4.1.1"
+    "zone.js": "~0.11.4"
   },
   "devDependencies": {
     "@angular-builders/custom-webpack": "13.0.0",
@@ -58,6 +59,7 @@
     "@ngx-translate/core": "14.0.0",
     "@ngx-translate/http-loader": "7.0.0",
     "@playwright/test": "1.16.3",
+    "@types/fontkit": "1.8.0",
     "@types/jasmine": "3.10.2",
     "@types/jasminewd2": "2.0.10",
     "@types/node": "16.11.7",

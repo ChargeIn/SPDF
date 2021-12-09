@@ -38,6 +38,7 @@ export const FORMAT_SPECIAL = {
 };
 
 export const FORMAT_DEFAULT = {
+  // eslint-disable-next-line id-blacklist
   number: {
     nDec: 0,
     sepComma: false,

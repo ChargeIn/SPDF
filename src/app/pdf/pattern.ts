@@ -8,7 +8,7 @@ import { PDFReference } from './reference';
 
 const underlyingColorSpaces = ['DeviceCMYK', 'DeviceRGB'];
 
-class PDFTilingPattern {
+export class PDFTilingPattern {
   private _doc: PDFDocument;
   private readonly _bBox: [number, number, number, number];
   private readonly _xStep: number;

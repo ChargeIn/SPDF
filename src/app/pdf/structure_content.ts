@@ -7,6 +7,7 @@
 import { PDFReference } from './reference';
 
 export class PDFStructureContent {
+  refs: { mcid: any; pageRef: PDFReference }[];
   constructor(pageRef: PDFReference, mcid) {
     this.refs = [{ pageRef, mcid }];
   }

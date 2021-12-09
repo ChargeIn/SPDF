@@ -132,32 +132,30 @@ export class DecodeFlateStream {
     5,
   ];
 
-  private readonly bytes: number[];
-  private bytesPos: number;
-  private codeSize: number;
-  private codeBuf: number;
-  private eof = false;
-  private bufferLength= 0;
-  private pos = 0;
   buffer: Uint8Array = null;
-
-  error(e) {
-    throw new Error(e);
-  }
+  private readonly _bytes: number[];
+  private _bytesPos: number;
+  private _codeSize: number;
+  private _codeBuf: number;
+  private _eof = false;
+  private _bufferLength = 0;
+  private _pos = 0;
 
   constructor(bytes) {
     //let bytes = stream.getBytes();
     let bytesPos = 0;
-    
-    let cmf = bytes[bytesPos++];
-    let flg = bytes[bytesPos++];
+
+    const cmf = bytes[bytesPos++];
+    const flg = bytes[bytesPos++];
+    // eslint-disable-next-line eqeqeq
     if (cmf == -1 || flg == -1) {
       this.error('Invalid header in flate stream');
     }
-    if ((cmf & 0x0f) != 0x08)
-    {
+    // eslint-disable-next-line eqeqeq
+    if ((cmf & 0x0f) != 0x08) {
       this.error('Unknown compression method in flate stream');
     }
+    // eslint-disable-next-line eqeqeq
     if (((cmf << 8) + flg) % 31 != 0) {
       this.error('Bad FCHECK in flate stream');
     }
@@ -165,77 +163,88 @@ export class DecodeFlateStream {
       this.error('FDICT bit set in flate stream');
     }
 
-    this.bytes = bytes;
-    this.bytesPos = bytesPos;
+    this._bytes = bytes;
+    this._bytesPos = bytesPos;
 
-    this.codeSize = 0;
-    this.codeBuf = 0;
+    this._codeSize = 0;
+    this._codeBuf = 0;
+  }
+
+  error(e) {
+    throw new Error(e);
   }
 
   getBits(bits) {
-    let codeSize = this.codeSize;
-    let codeBuf = this.codeBuf;
-    let bytes = this.bytes;
-    let bytesPos = this.bytesPos;
+    let codeSize = this._codeSize;
+    let codeBuf = this._codeBuf;
+    const bytes = this._bytes;
+    let bytesPos = this._bytesPos;
 
     let b;
     while (codeSize < bits) {
-      if (typeof (b = bytes[bytesPos++]) == 'undefined')
+      if (typeof (b = bytes[bytesPos++]) == 'undefined') {
         this.error('Bad encoding in flate stream');
+      }
       codeBuf |= b << codeSize;
       codeSize += 8;
     }
     b = codeBuf & ((1 << bits) - 1);
-    this.codeBuf = codeBuf >> bits;
-    this.codeSize = codeSize - bits;
-    this.bytesPos = bytesPos;
+    this._codeBuf = codeBuf >> bits;
+    this._codeSize = codeSize - bits;
+    this._bytesPos = bytesPos;
     return b;
   }
 
   getCode(table) {
-    let codes = table[0];
-    let maxLen = table[1];
-    let codeSize = this.codeSize;
-    let codeBuf = this.codeBuf;
-    let bytes = this.bytes;
-    let bytesPos = this.bytesPos;
+    const codes = table[0];
+    const maxLen = table[1];
+    let codeSize = this._codeSize;
+    let codeBuf = this._codeBuf;
+    const bytes = this._bytes;
+    let bytesPos = this._bytesPos;
 
     while (codeSize < maxLen) {
       let b;
-      if (typeof (b = bytes[bytesPos++]) == 'undefined')
+      if (typeof (b = bytes[bytesPos++]) == 'undefined') {
         this.error('Bad encoding in flate stream');
+      }
       codeBuf |= b << codeSize;
       codeSize += 8;
     }
-    let code = codes[codeBuf & ((1 << maxLen) - 1)];
-    let codeLen = code >> 16;
-    let codeVal = code & 0xffff;
-    if (codeSize == 0 || codeSize < codeLen || codeLen == 0)
+    const code = codes[codeBuf & ((1 << maxLen) - 1)];
+    const codeLen = code >> 16;
+    const codeVal = code & 0xffff;
+    // eslint-disable-next-line eqeqeq
+    if (codeSize == 0 || codeSize < codeLen || codeLen == 0) {
       this.error('Bad encoding in flate stream');
-    this.codeBuf = codeBuf >> codeLen;
-    this.codeSize = codeSize - codeLen;
-    this.bytesPos = bytesPos;
+    }
+    this._codeBuf = codeBuf >> codeLen;
+    this._codeSize = codeSize - codeLen;
+    this._bytesPos = bytesPos;
     return codeVal;
   }
 
   generateHuffmanTable(lengths) {
-    let n = lengths.length;
+    const n = lengths.length;
 
     // find max code length
     let maxLen = 0;
     for (let i = 0; i < n; ++i) {
-      if (lengths[i] > maxLen) maxLen = lengths[i];
+      if (lengths[i] > maxLen) {
+        maxLen = lengths[i];
+      }
     }
 
     // build the table
-    let size = 1 << maxLen;
-    let codes = new Uint32Array(size);
+    const size = 1 << maxLen;
+    const codes = new Uint32Array(size);
     for (
       let len = 1, code = 0, skip = 2;
       len <= maxLen;
       ++len, code <<= 1, skip <<= 1
     ) {
       for (let val = 0; val < n; ++val) {
+        // eslint-disable-next-line eqeqeq
         if (lengths[val] == len) {
           // bit-reverse the code
           let code2 = 0;
@@ -246,7 +255,9 @@ export class DecodeFlateStream {
           }
 
           // fill the table entries
-          for (let i = code2; i < size; i += skip) codes[i] = (len << 16) | val;
+          for (let i = code2; i < size; i += skip) {
+            codes[i] = (len << 16) | val;
+          }
 
           ++code;
         }
@@ -259,85 +270,100 @@ export class DecodeFlateStream {
   readBlock() {
     // read block header
     let hdr = this.getBits(3);
-    if (hdr & 1) this.eof = true;
+    if (hdr & 1) {
+      this._eof = true;
+    }
     hdr >>= 1;
 
+    // eslint-disable-next-line eqeqeq
     if (hdr == 0) {
       // uncompressed block
-      let bytes = this.bytes;
-      let bytesPos = this.bytesPos;
+      const bytes = this._bytes;
+      let bytesPos = this._bytesPos;
       let b;
 
-      if (typeof (b = bytes[bytesPos++]) == 'undefined')
+      if (typeof (b = bytes[bytesPos++]) == 'undefined') {
         this.error('Bad block header in flate stream');
+      }
       let blockLen = b;
-      if (typeof (b = bytes[bytesPos++]) == 'undefined')
+      if (typeof (b = bytes[bytesPos++]) == 'undefined') {
         this.error('Bad block header in flate stream');
+      }
       blockLen |= b << 8;
-      if (typeof (b = bytes[bytesPos++]) == 'undefined')
+      if (typeof (b = bytes[bytesPos++]) == 'undefined') {
         this.error('Bad block header in flate stream');
+      }
       let check = b;
-      if (typeof (b = bytes[bytesPos++]) == 'undefined')
+      if (typeof (b = bytes[bytesPos++]) == 'undefined') {
         this.error('Bad block header in flate stream');
+      }
       check |= b << 8;
-      if (check != (~blockLen & 0xffff))
+      // eslint-disable-next-line eqeqeq
+      if (check != (~blockLen & 0xffff)) {
         this.error('Bad uncompressed block length in flate stream');
+      }
 
-      this.codeBuf = 0;
-      this.codeSize = 0;
+      this._codeBuf = 0;
+      this._codeSize = 0;
 
-      let bufferLength = this.bufferLength;
-      let buffer = this.ensureBuffer(bufferLength + blockLen);
-      let end = bufferLength + blockLen;
-      this.bufferLength = end;
+      const bufferLength = this._bufferLength;
+      const buff = this.ensureBuffer(bufferLength + blockLen);
+      const end = bufferLength + blockLen;
+      this._bufferLength = end;
       for (let n = bufferLength; n < end; ++n) {
         if (typeof (b = bytes[bytesPos++]) == 'undefined') {
-          this.eof = true;
+          this._eof = true;
           break;
         }
-        buffer[n] = b;
+        buff[n] = b;
       }
-      this.bytesPos = bytesPos;
+      this._bytesPos = bytesPos;
       return;
     }
 
     let litCodeTable;
     let distCodeTable;
+    // eslint-disable-next-line eqeqeq
     if (hdr == 1) {
       // compressed block, fixed codes
       litCodeTable = this.fixedLitCodeTab;
       distCodeTable = this.fixedDistCodeTab;
+      // eslint-disable-next-line eqeqeq
     } else if (hdr == 2) {
       // compressed block, dynamic codes
-      let numLitCodes = this.getBits(5) + 257;
-      let numDistCodes = this.getBits(5) + 1;
-      let numCodeLenCodes = this.getBits(4) + 4;
+      const numLitCodes = this.getBits(5) + 257;
+      const numDistCodes = this.getBits(5) + 1;
+      const numCodeLenCodes = this.getBits(4) + 4;
 
       // build the code lengths code table
-      let codeLenCodeLengths = Array(this.codeLenCodeMap.length);
+      const codeLenCodeLengths = Array(this.codeLenCodeMap.length);
       let i = 0;
-      while (i < numCodeLenCodes)
-        codeLenCodeLengths[(this.codeLenCodeMap)[i++]] = this.getBits(3);
-      let codeLenCodeTab = this.generateHuffmanTable(codeLenCodeLengths);
+      while (i < numCodeLenCodes) {
+        codeLenCodeLengths[this.codeLenCodeMap[i++]] = this.getBits(3);
+      }
+      const codeLenCodeTab = this.generateHuffmanTable(codeLenCodeLengths);
 
       // build the literal and distance code tables
       let len = 0;
       i = 0;
-      let codes = numLitCodes + numDistCodes;
-      let codeLengths = new Array(codes);
+      const codes = numLitCodes + numDistCodes;
+      const codeLengths = new Array(codes);
       while (i < codes) {
-        let code = this.getCode(codeLenCodeTab);
+        const code = this.getCode(codeLenCodeTab);
+        // eslint-disable-next-line eqeqeq
         if (code == 16) {
           let rep = this.getBits(2) + 3;
           while (rep-- > 0) {
             codeLengths[i++] = len;
           }
+          // eslint-disable-next-line eqeqeq
         } else if (code == 17) {
           const what = (len = 0);
           let rep = this.getBits(3) + 3;
           while (rep-- > 0) {
             codeLengths[i++] = what;
           }
+          // eslint-disable-next-line eqeqeq
         } else if (code == 18) {
           const what = (len = 0);
           let rep = this.getBits(7) + 11;
@@ -361,7 +387,7 @@ export class DecodeFlateStream {
 
     let buffer = this.buffer;
     let limit = buffer ? buffer.length : 0;
-    let pos = this.bufferLength;
+    let pos = this._bufferLength;
     while (true) {
       let code1 = this.getCode(litCodeTable);
       if (code1 < 256) {
@@ -372,107 +398,130 @@ export class DecodeFlateStream {
         buffer[pos++] = code1;
         continue;
       }
+      // eslint-disable-next-line eqeqeq
       if (code1 == 256) {
-        this.bufferLength = pos;
+        this._bufferLength = pos;
         return;
       }
       code1 -= 257;
       code1 = this.lengthDecode[code1];
       let code2 = code1 >> 16;
-      if (code2 > 0) code2 = this.getBits(code2);
-      let len = (code1 & 0xffff) + code2;
+      if (code2 > 0) {
+        code2 = this.getBits(code2);
+      }
+      const len = (code1 & 0xffff) + code2;
       code1 = this.getCode(distCodeTable);
       code1 = this.distDecode[code1];
       code2 = code1 >> 16;
-      if (code2 > 0) code2 = this.getBits(code2);
-      let dist = (code1 & 0xffff) + code2;
+      if (code2 > 0) {
+        code2 = this.getBits(code2);
+      }
+      const dist = (code1 & 0xffff) + code2;
       if (pos + len >= limit) {
         buffer = this.ensureBuffer(pos + len);
         limit = buffer.length;
       }
-      for (let k = 0; k < len; ++k, ++pos) buffer[pos] = buffer[pos - dist];
+      for (let k = 0; k < len; ++k, ++pos) {
+        buffer[pos] = buffer[pos - dist];
+      }
     }
   }
 
   ensureBuffer(requested) {
-    let buffer = this.buffer;
-    let current = buffer ? buffer.byteLength : 0;
-    if (requested < current) return buffer;
+    const buffer = this.buffer;
+    const current = buffer ? buffer.byteLength : 0;
+    if (requested < current) {
+      return buffer;
+    }
     let size = 512;
-    while (size < requested) size <<= 1;
-    let buffer2 = new Uint8Array(size);
-    for (let i = 0; i < current; ++i) buffer2[i] = buffer[i];
+    while (size < requested) {
+      size <<= 1;
+    }
+    const buffer2 = new Uint8Array(size);
+    for (let i = 0; i < current; ++i) {
+      buffer2[i] = buffer[i];
+    }
     return (this.buffer = buffer2);
   }
 
   getByte() {
-    let pos = this.pos;
-    while (this.bufferLength <= pos) {
-      if (this.eof) return null;
+    const pos = this._pos;
+    while (this._bufferLength <= pos) {
+      if (this._eof) {
+        return null;
+      }
       this.readBlock();
     }
-    return this.buffer[this.pos++];
+    return this.buffer[this._pos++];
   }
 
   getBytes(length?: number) {
-    let pos = this.pos;
+    const pos = this._pos;
 
     let end;
     if (length) {
       this.ensureBuffer(pos + length);
       end = pos + length;
 
-      while (!this.eof && this.bufferLength < end) {
+      while (!this._eof && this._bufferLength < end) {
         this.readBlock();
       }
 
-      let bufEnd = this.bufferLength;
+      const bufEnd = this._bufferLength;
       if (end > bufEnd) {
         end = bufEnd;
       }
     } else {
-      while (!this.eof){
+      while (!this._eof) {
         this.readBlock();
       }
 
-      end = this.bufferLength;
+      end = this._bufferLength;
     }
 
-    this.pos = end;
+    this._pos = end;
     return this.buffer.subarray(pos, end);
   }
 
   lookChar() {
-    let pos = this.pos;
-    while (this.bufferLength <= pos) {
-      if (this.eof) return null;
+    const pos = this._pos;
+    while (this._bufferLength <= pos) {
+      if (this._eof) {
+        return null;
+      }
       this.readBlock();
     }
-    return String.fromCharCode(this.buffer[this.pos]);
+    return String.fromCharCode(this.buffer[this._pos]);
   }
 
   getChar() {
-    let pos = this.pos;
-    while (this.bufferLength <= pos) {
-      if (this.eof) return null;
+    const pos = this._pos;
+    while (this._bufferLength <= pos) {
+      if (this._eof) {
+        return null;
+      }
       this.readBlock();
     }
-    return String.fromCharCode(this.buffer[this.pos++]);
+    return String.fromCharCode(this.buffer[this._pos++]);
   }
 
   makeSubStream(start, length, dict) {
-    let end = start + length;
-    while (this.bufferLength <= end && !this.eof) this.readBlock();
+    const end = start + length;
+    while (this._bufferLength <= end && !this._eof) {
+      this.readBlock();
+    }
     // @ts-ignore
     return new Stream(this.buffer, start, length, dict);
   }
 
   skip(n) {
-    if (!n) n = 1;
-    this.pos += n;
+    if (!n) {
+      n = 1;
+    }
+    this._pos += n;
   }
 
   reset() {
-    this.pos = 0;
+    this._pos = 0;
   }
 }

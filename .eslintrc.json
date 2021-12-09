@@ -29,6 +29,9 @@
         "@typescript-eslint/no-non-null-assertion": "off",
         "space-before-function-paren": ["off", "always"],
         "@typescript-eslint/prefer-for-of": "off",
+        "no-throw-literal": "off",
+        "guard-for-in": "off",
+        "radix": "off",
         "@typescript-eslint/naming-convention": [
           "error",
           {

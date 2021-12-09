@@ -2,8 +2,9 @@
  * Original PDFKit jpeg.js
  * Translated to ts by Florian Plesker
  */
-import { PDFDocument } from '../document';
-import { PDFReference } from '../reference';
+
+import { PDFReference } from '../../reference';
+import { PDFDocument } from '../../document';
 
 const MARKERS = [
   0xffc0, 0xffc1, 0xffc2, 0xffc3, 0xffc5, 0xffc6, 0xffc7, 0xffc8, 0xffc9,
@@ -17,30 +18,30 @@ const COLOR_SPACE_MAP: { [key: number]: string } = {
 };
 
 export class JPEG {
-  private obj: PDFReference | null;
-  private readonly colorSpace: string;
-  private readonly width: number;
-  private readonly height: number;
-  private data: any;
-  private label: string;
-  private readonly bits: number[];
+  private _obj: PDFReference | null;
+  private readonly _colorSpace: string;
+  private readonly _width: number;
+  private readonly _height: number;
+  private _data: any;
+  private _label: string;
+  private readonly _bits: number[];
 
   constructor(data: any, label: string) {
     let marker;
-    this.data = data;
-    this.label = label;
-    if (this.data.readUInt16BE(0) !== 0xffd8) {
+    this._data = data;
+    this._label = label;
+    if (this._data.readUInt16BE(0) !== 0xffd8) {
       throw 'SOI not found in JPEG';
     }
 
     let pos = 2;
-    while (pos < this.data.length) {
-      marker = this.data.readUInt16BE(pos);
+    while (pos < this._data.length) {
+      marker = this._data.readUInt16BE(pos);
       pos += 2;
       if (MARKERS.includes(marker)) {
         break;
       }
-      pos += this.data.readUInt16BE(pos);
+      pos += this._data.readUInt16BE(pos);
     }
 
     if (!MARKERS.includes(marker)) {
@@ -48,44 +49,44 @@ export class JPEG {
     }
     pos += 2;
 
-    this.bits = this.data[pos++];
-    this.height = this.data.readUInt16BE(pos);
+    this._bits = this._data[pos++];
+    this._height = this._data.readUInt16BE(pos);
     pos += 2;
 
-    this.width = this.data.readUInt16BE(pos);
+    this._width = this._data.readUInt16BE(pos);
     pos += 2;
 
-    const channels = this.data[pos++];
-    this.colorSpace = COLOR_SPACE_MAP[channels];
+    const channels = this._data[pos++];
+    this._colorSpace = COLOR_SPACE_MAP[channels];
 
-    this.obj = null;
+    this._obj = null;
   }
 
   embed(document: PDFDocument) {
-    if (this.obj) {
+    if (this._obj) {
       return;
     }
 
-    this.obj = document.ref({
+    this._obj = document.ref({
       Type: 'XObject',
       Subtype: 'Image',
-      BitsPerComponent: this.bits,
-      Width: this.width,
-      Height: this.height,
-      ColorSpace: this.colorSpace,
+      BitsPerComponent: this._bits,
+      Width: this._width,
+      Height: this._height,
+      ColorSpace: this._colorSpace,
       Filter: 'DCTDecode',
     });
 
     // add extra decode params for CMYK images. By swapping the
     // min and max values from the default, we invert the colors. See
     // section 4.8.4 of the spec.
-    if (this.colorSpace === 'DeviceCMYK') {
-      this.obj.data['Decode'] = [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
+    if (this._colorSpace === 'DeviceCMYK') {
+      this._obj.data.Decode = [1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0];
     }
 
-    this.obj.end(this.data);
+    this._obj.end(this._data);
 
     // free memory
-    return (this.data = null);
+    return (this._data = null);
   }
 }

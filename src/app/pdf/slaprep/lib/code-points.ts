@@ -3,6 +3,7 @@ import { inRange } from './utlis';
 
 /**
  * A.1 Unassigned code points in Unicode 3.2
+ *
  * @link https://tools.ietf.org/html/rfc3454#appendix-A.1
  */
 const unassigned_code_points = [
@@ -105,6 +106,7 @@ export const isUnassignedCodePoint = (character: number) =>
 // prettier-ignore-start
 /**
  * B.1 Commonly mapped to nothing
+ *
  * @link https://tools.ietf.org/html/rfc3454#appendix-B.1
  */
 const commonly_mapped_to_nothing = [
@@ -123,9 +125,10 @@ export const isCommonlyMappedToNothing = (character: number) =>
 // prettier-ignore-start
 /**
  * C.1.2 Non-ASCII space characters
+ *
  * @link https://tools.ietf.org/html/rfc3454#appendix-C.1.2
  */
-const non_ASCII_space_characters = [
+const NON_ASCII_SPACE_CHARACTERS = [
   0x00a0, 0x00a0 /* NO-BREAK SPACE */, 0x1680, 0x1680 /* OGHAM SPACE MARK */,
   0x2000, 0x2000 /* EN QUAD */, 0x2001, 0x2001 /* EM QUAD */, 0x2002,
   0x2002 /* EN SPACE */, 0x2003, 0x2003 /* EM SPACE */, 0x2004,
@@ -140,12 +143,13 @@ const non_ASCII_space_characters = [
 // prettier-ignore-end
 
 export const isNonASCIISpaceCharacter = (character: number) =>
-  inRange(character, non_ASCII_space_characters);
+  inRange(character, NON_ASCII_SPACE_CHARACTERS);
 
 // prettier-ignore-start
-const non_ASCII_controls_characters = [
+const NON_ASCII_CONTROLS_CHARACTERS = [
   /**
    * C.2.2 Non-ASCII control characters
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.2.2
    */
   0x0080, 0x009f /* [CONTROL CHARACTERS] */, 0x06dd,
@@ -165,6 +169,7 @@ const non_ASCII_controls_characters = [
 const non_character_codepoints = [
   /**
    * C.4 Non-character code points
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.4
    */
   0xfdd0, 0xfdef /* [NONCHARACTER CODE POINTS] */, 0xfffe,
@@ -192,12 +197,14 @@ const non_character_codepoints = [
 const prohibited_characters = [
   /**
    * C.2.1 ASCII control characters
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.2.1
    */
   0, 0x001f /* [CONTROL CHARACTERS] */, 0x007f, 0x007f /* DELETE */,
 
   /**
    * C.8 Change display properties or are deprecated
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.8
    */
   0x0340, 0x0340 /* COMBINING GRAVE TONE MARK */, 0x0341,
@@ -216,24 +223,28 @@ const prohibited_characters = [
 
   /**
    * C.7 Inappropriate for canonical representation
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.7
    */
   0x2ff0, 0x2ffb /* [IDEOGRAPHIC DESCRIPTION CHARACTERS] */,
 
   /**
    * C.5 Surrogate codes
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.5
    */
   0xd800, 0xdfff,
 
   /**
    * C.3 Private use
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.3
    */
   0xe000, 0xf8ff /* [PRIVATE USE, PLANE 0] */,
 
   /**
    * C.6 Inappropriate for plain text
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.6
    */
   0xfff9, 0xfff9 /* INTERLINEAR ANNOTATION ANCHOR */, 0xfffa,
@@ -244,6 +255,7 @@ const prohibited_characters = [
 
   /**
    * C.9 Tagging characters
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.9
    */
   0xe0001, 0xe0001 /* LANGUAGE TAG */, 0xe0020,
@@ -251,6 +263,7 @@ const prohibited_characters = [
 
   /**
    * C.3 Private use
+   *
    * @link https://tools.ietf.org/html/rfc3454#appendix-C.3
    */
 
@@ -260,14 +273,15 @@ const prohibited_characters = [
 // prettier-ignore-end
 
 export const isProhibitedCharacter = (character: number) =>
-  inRange(character, non_ASCII_space_characters) ||
+  inRange(character, NON_ASCII_SPACE_CHARACTERS) ||
   inRange(character, prohibited_characters) ||
-  inRange(character, non_ASCII_controls_characters) ||
+  inRange(character, NON_ASCII_CONTROLS_CHARACTERS) ||
   inRange(character, non_character_codepoints);
 
 // prettier-ignore-start
 /**
  * D.1 Characters with bidirectional property "R" or "AL"
+ *
  * @link https://tools.ietf.org/html/rfc3454#appendix-D.1
  */
 const bidirectional_r_al = [
@@ -288,6 +302,7 @@ export const isBidirectionalRAL = (character: number) =>
 // prettier-ignore-start
 /**
  * D.2 Characters with bidirectional property "L"
+ *
  * @link https://tools.ietf.org/html/rfc3454#appendix-D.2
  */
 const bidirectional_l = [

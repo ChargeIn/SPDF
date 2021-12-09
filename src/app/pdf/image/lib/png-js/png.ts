@@ -19,7 +19,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-import {DecodeFlateStream} from './zlib';
+import { DecodeFlateStream } from './zlib';
 
 const APNG_DISPOSE_OP_NONE = 0;
 const APNG_DISPOSE_OP_BACKGROUND = 1;
@@ -29,32 +29,32 @@ const APNG_BLEND_OP_OVER = 1;
 
 export class PNG {
   private readonly data: Uint8Array;
-  private readonly width!: number;
-  private readonly height!: number;
-  private readonly bits!: number;
+  readonly width!: number;
+  readonly height!: number;
+  readonly bits!: number;
   private pos: number;
   private filterMethod!: number;
-  private readonly hasAlphaChannel: boolean;
-  private readonly colors!: number;
+  readonly hasAlphaChannel: boolean;
+  readonly colors!: number;
   private readonly colorType!: number;
   private compressionMethod!: number;
-  private readonly interlaceMethod!: number;
+  readonly interlaceMethod!: number;
   private readonly animation: {
     numFrames: number;
     frames: any[];
     numPlays: number;
     _timeout?: NodeJS.Timeout;
   } | null;
-  private palette: number[];
-  private transparency: {
+  palette: number[];
+  transparency: {
     rgb?: number[];
     indexed?: number[];
     grayscale?: number;
   };
   private readonly text: { [key: string]: string };
-  private readonly imgData: number[] | Uint8Array;
+  readonly imgData: number[] | Uint8Array;
   private readonly pixelBitlength: number = 0;
-  private colorSpace: string = '';
+  colorSpace: string = '';
   private _decodedPalette!: Uint8Array;
 
   static load(
@@ -288,12 +288,12 @@ export class PNG {
       return new Uint8Array(0);
     }
 
-    console.log("decode Pixels", data);
+    console.log('decode Pixels', data);
 
     data = new DecodeFlateStream(data);
     data = data.getBytes();
 
-    console.log("data as bytes", data)
+    console.log('data as bytes', data);
 
     const { width, height } = this;
     const pixelBytes = this.pixelBitlength / 8;
@@ -331,12 +331,12 @@ export class PNG {
               byte = data[pos++];
               col = (i - (i % pixelBytes)) / pixelBytes;
               upper =
-                  row &&
-                  buffer[
+                row &&
+                buffer[
                   (row - 1) * scanlineLength +
-                  col * pixelBytes +
-                  (i % pixelBytes)
-                      ];
+                    col * pixelBytes +
+                    (i % pixelBytes)
+                ];
               buffer[c++] = (upper + byte) % 256;
             }
             break;
@@ -347,12 +347,12 @@ export class PNG {
               col = (i - (i % pixelBytes)) / pixelBytes;
               left = i < pixelBytes ? 0 : buffer[c - pixelBytes];
               upper =
-                  row &&
-                  buffer[
+                row &&
+                buffer[
                   (row - 1) * scanlineLength +
-                  col * pixelBytes +
-                  (i % pixelBytes)
-                      ];
+                    col * pixelBytes +
+                    (i % pixelBytes)
+                ];
               buffer[c++] = (byte + Math.floor((left + upper) / 2)) % 256;
             }
             break;
@@ -368,18 +368,18 @@ export class PNG {
                 upper = upperLeft = 0;
               } else {
                 upper =
-                    buffer[
+                  buffer[
                     (row - 1) * scanlineLength +
-                    col * pixelBytes +
-                    (i % pixelBytes)
-                        ];
+                      col * pixelBytes +
+                      (i % pixelBytes)
+                  ];
                 upperLeft =
-                    col &&
-                    buffer[
+                  col &&
+                  buffer[
                     (row - 1) * scanlineLength +
-                    (col - 1) * pixelBytes +
-                    (i % pixelBytes)
-                        ];
+                      (col - 1) * pixelBytes +
+                      (i % pixelBytes)
+                  ];
               }
 
               const p = left + upper - upperLeft;
@@ -439,7 +439,7 @@ export class PNG {
       pass(0, 0, 1, 1, true);
     }
 
-    console.log("Render end", pixels);
+    console.log('Render end', pixels);
 
     return pixels;
   }
@@ -601,9 +601,9 @@ export class PNG {
       this.decodeFrames(ctx);
       return this.animate(ctx);
     } else {
-      console.log("Render Start", this.imgData);
+      console.log('Render Start', this.imgData);
       const data = ctx.createImageData(this.width, this.height);
-      console.log("Pixels", this.decodePixels());
+      console.log('Pixels', this.decodePixels());
       this.copyToImageData(data, this.decodePixels());
       return ctx.putImageData(data, 0, 0);
     }

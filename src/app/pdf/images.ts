@@ -3,8 +3,9 @@
  * Translated to ts by Florian Plesker
  */
 import * as fs from 'fs';
-import {JPEG} from './image/lib/jpeg';
-import {PNG} from './image/lib/png-js/png';
+import { JPEG } from './image/lib/jpeg';
+import { PNG } from './image/lib/png-js/png';
+import { PNGImage } from './image/lib/png';
 
 export class PDFImage {
   static open(src, label) {
@@ -28,7 +29,7 @@ export class PDFImage {
     if (data[0] === 0xff && data[1] === 0xd8) {
       return new JPEG(data, label);
     } else if (data[0] === 0x89 && data.toString('ascii', 1, 4) === 'PNG') {
-      return new PNG(data, label);
+      return new PNGImage(data, label);
     } else {
       throw new Error('Unknown image format.');
     }

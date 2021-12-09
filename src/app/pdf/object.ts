@@ -4,7 +4,7 @@
  * Translated to ts by Florian Plesker
  */
 import { PDFAbstractReference } from './reference';
-import { PDFTree } from './tree';
+import { PDFTree } from './trees';
 
 const pad = (str: number, length: number) =>
   (Array(length + 1).join('0') + str).slice(-length);
@@ -48,11 +48,11 @@ export class PDFObject {
 
       // String objects are converted to PDF strings (UTF-16)
     } else if (object instanceof String) {
-      let string = object;
+      let str = object;
       // Detect if this is a unicode string
       let isUnicode = false;
-      for (let i = 0, end = string.length; i < end; i++) {
-        if (string.charCodeAt(i) > 0x7f) {
+      for (let i = 0, end = str.length; i < end; i++) {
+        if (str.charCodeAt(i) > 0x7f) {
           isUnicode = true;
           break;
         }
@@ -61,22 +61,22 @@ export class PDFObject {
       // If so, encode it as big endian UTF-16
       let stringBuffer;
       if (isUnicode) {
-        stringBuffer = swapBytes(Buffer.from(`\ufeff${string}`, 'utf16le'));
+        stringBuffer = swapBytes(Buffer.from(`\ufeff${str}`, 'utf16le'));
       } else {
-        stringBuffer = Buffer.from(string.valueOf(), 'ascii');
+        stringBuffer = Buffer.from(str.valueOf(), 'ascii');
       }
 
       // Encrypt the string when necessary
       if (encryptFn) {
-        string = encryptFn(stringBuffer).toString('binary');
+        str = encryptFn(stringBuffer).toString('binary');
       } else {
-        string = stringBuffer.toString('binary');
+        str = stringBuffer.toString('binary');
       }
 
       // Escape characters as required by the spec
-      string = string.replace(escapableRe, (c) => escapable[c]);
+      str = str.replace(escapableRe, (c) => escapable[c]);
 
-      return `(${string})`;
+      return `(${str})`;
 
       // Buffers are converted to PDF hex strings
     } else if (Buffer.isBuffer(object)) {
@@ -87,7 +87,7 @@ export class PDFObject {
     ) {
       return object.toString();
     } else if (object instanceof Date) {
-      let string =
+      let str =
         `D:${pad(object.getUTCFullYear(), 4)}` +
         pad(object.getUTCMonth() + 1, 2) +
         pad(object.getUTCDate(), 2) +
@@ -98,13 +98,13 @@ export class PDFObject {
 
       // Encrypt the string when necessary
       if (encryptFn) {
-        string = encryptFn(Buffer.from(string, 'ascii')).toString('binary');
+        str = encryptFn(Buffer.from(str, 'ascii')).toString('binary');
 
         // Escape characters as required by the spec
-        string = string.replace(escapableRe, (c) => escapable[c]);
+        str = str.replace(escapableRe, (c) => escapable[c]);
       }
 
-      return `(${string})`;
+      return `(${str})`;
     } else if (Array.isArray(object)) {
       const items: string = object
         .map((e) => PDFObject.convert(e, encryptFn))
@@ -112,7 +112,8 @@ export class PDFObject {
       return `[${items}]`;
     } else if ({}.toString.call(object) === '[object Object]') {
       const out = ['<<'];
-      for (let key in object) {
+      // eslint-disable-next-line guard-for-in
+      for (const key in object) {
         const val = object[key];
         out.push(`/${key} ${PDFObject.convert(val, encryptFn)}`);
       }
@@ -126,6 +127,7 @@ export class PDFObject {
     }
   }
 
+  // eslint-disable-next-line id-blacklist
   static number(n: number) {
     if (n > -1e21 && n < 1e21) {
       return Math.round(n * 1e6) / 1e6;

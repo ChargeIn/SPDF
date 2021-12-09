@@ -34,8 +34,9 @@ const last = (x: string) => x[x.length - 1];
  * Convert provided string into an array of Unicode Code Points.
  * Based on https://stackoverflow.com/a/21409165/1556249
  * and https://www.npmjs.com/package/code-point-at.
- * @param {string} input
- * @returns {number[]}
+ *
+ * @param input
+ * @returns  list of numbers
  */
 export function toCodePoints(input: string) {
   const codepoints = [];
@@ -62,10 +63,11 @@ export function toCodePoints(input: string) {
 
 /**
  * SASLprep.
- * @param {string} input
- * @param {Object} opts
- * @param {boolean} opts.allowUnassigned
- * @returns {string}
+ *
+ * @param input
+ * @param opts
+ * @param opts.allowUnassigned
+ * @returns
  */
 export function saslprep(
   input: string,
