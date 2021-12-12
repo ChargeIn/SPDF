@@ -32,6 +32,9 @@
         "no-throw-literal": "off",
         "guard-for-in": "off",
         "radix": "off",
+        "jsdoc/newline-after-description": "off",
+        "jsdoc/no-types": "off",
+        "id-blacklist": "off",
         "@typescript-eslint/naming-convention": [
           "error",
           {
