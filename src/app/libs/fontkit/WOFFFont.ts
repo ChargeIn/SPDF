@@ -14,14 +14,14 @@ export default class WOFFFont extends TTFFont {
   }
 
   _getTableStream(tag) {
-    let table = this.directory.tables[tag];
+    const table = this.directory.tables[tag];
     if (table) {
       this.stream.pos = table.offset;
 
       if (table.compLength < table.length) {
         this.stream.pos += 2; // skip deflate header
-        let outBuffer = new Buffer(table.length);
-        let buf = inflate(
+        const outBuffer = new Buffer(table.length);
+        const buf = inflate(
           this.stream.readBuffer(table.compLength - 2),
           outBuffer
         );

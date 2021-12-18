@@ -13,12 +13,20 @@ import GlyphVariationProcessor from './glyph/GlyphVariationProcessor';
 import TTFSubset from './subset/TTFSubset';
 import CFFSubset from './subset/CFFSubset';
 import BBox from './glyph/BBox';
+import Glyph from './glyph/Glyph';
 
 /**
  * This is the base class for all SFNT-based font formats in fontkit.
  * It supports TrueType, and PostScript glyphs, and several color glyph formats.
  */
 export default class TTFFont {
+  defaultLanguage: string;
+  name: {
+    records: {
+      postscriptName: string;
+    };
+  };
+
   constructor(stream, variationCoords = null) {
     this.defaultLanguage = null;
     this.stream = stream;
@@ -290,7 +298,7 @@ export default class TTFFont {
    * @param {number} codePoint
    * @return {Glyph}
    */
-  glyphForCodePoint(codePoint) {
+  glyphForCodePoint(codePoint): Glyph {
     return this.getGlyph(this._cmapProcessor.lookup(codePoint), [codePoint]);
   }
 
@@ -303,7 +311,7 @@ export default class TTFFont {
    * @param {string} str
    * @return {Glyph[]}
    */
-  glyphsForString(str) {
+  glyphsForString(str): Glyph[] {
     const glyphs = [];
     const len = str.length;
     let idx = 0;
@@ -422,7 +430,7 @@ export default class TTFFont {
    * @param {number[]} characters
    * @return {Glyph}
    */
-  getGlyph(glyph, characters = []) {
+  getGlyph(glyph, characters = []): Glyph {
     if (!this._glyphs[glyph]) {
       if (this.directory.tables.sbix) {
         this._glyphs[glyph] = new SBIXGlyph(glyph, characters, this);

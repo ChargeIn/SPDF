@@ -51,7 +51,7 @@ export default class AATStateMachine {
       }
 
       const row = this.stateTable.stateArray.getItem(currentState);
-      let entryIndex = row[classCode];
+      const entryIndex = row[classCode];
       const entry = this.stateTable.entryTable.getItem(entryIndex);
 
       if (
@@ -82,16 +82,16 @@ export default class AATStateMachine {
 
     visited.add(state);
 
-    let { nClasses, stateArray, entryTable } = this.stateTable;
-    let row = stateArray.getItem(state);
+    const { nClasses, stateArray, entryTable } = this.stateTable;
+    const row = stateArray.getItem(state);
 
     // Skip predefined classes
     for (let classCode = 4; classCode < nClasses; classCode++) {
-      let entryIndex = row[classCode];
-      let entry = entryTable.getItem(entryIndex);
+      const entryIndex = row[classCode];
+      const entry = entryTable.getItem(entryIndex);
 
       // Try all glyphs in the class
-      for (let glyph of this.lookupTable.glyphsForValue(classCode)) {
+      for (const glyph of this.lookupTable.glyphsForValue(classCode)) {
         if (opts.enter) {
           opts.enter(glyph, entry);
         }

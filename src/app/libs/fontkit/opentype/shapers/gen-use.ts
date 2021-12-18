@@ -1,117 +1,68 @@
 import codepoints from 'codepoints';
-import fs from 'fs';
 import UnicodeTrieBuilder from 'unicode-trie/builder';
 import compile from 'dfa/compile';
+import { fs } from '../../../fs';
 
 const CATEGORIES = {
   B: [
-    {UISC: 'Number'},
-    {UISC: 'Avagraha', UGC: 'Lo'},
-    {UISC: 'Bindu', UGC: 'Lo'},
-    {UISC: 'Consonant'},
-    {UISC: 'Consonant_Final', UGC: 'Lo'},
-    {UISC: 'Consonant_Head_Letter'},
-    {UISC: 'Consonant_Medial', UGC: 'Lo'},
-    {UISC: 'Consonant_Subjoined', UGC: 'Lo'},
-    {UISC: 'Tone_Letter'},
-    {UISC: 'Vowel', UGC: 'Lo'},
-    {UISC: 'Vowel_Independent'},
-    {UISC: 'Vowel_Dependent', UGC: 'Lo'}
+    { UISC: 'Number' },
+    { UISC: 'Avagraha', UGC: 'Lo' },
+    { UISC: 'Bindu', UGC: 'Lo' },
+    { UISC: 'Consonant' },
+    { UISC: 'Consonant_Final', UGC: 'Lo' },
+    { UISC: 'Consonant_Head_Letter' },
+    { UISC: 'Consonant_Medial', UGC: 'Lo' },
+    { UISC: 'Consonant_Subjoined', UGC: 'Lo' },
+    { UISC: 'Tone_Letter' },
+    { UISC: 'Vowel', UGC: 'Lo' },
+    { UISC: 'Vowel_Independent' },
+    { UISC: 'Vowel_Dependent', UGC: 'Lo' },
   ],
   CGJ: [0x034f],
-  CM: [
-    'Nukta',
-    'Gemination_Mark',
-    'Consonant_Killer'
-  ],
-  CS: [
-    'Consonant_With_Stacker'
-  ],
+  CM: ['Nukta', 'Gemination_Mark', 'Consonant_Killer'],
+  CS: ['Consonant_With_Stacker'],
   F: [
-    {UISC: 'Consonant_Final', UGC: {not: 'Lo'}},
-    {UISC: 'Consonant_Succeeding_Repha'}
+    { UISC: 'Consonant_Final', UGC: { not: 'Lo' } },
+    { UISC: 'Consonant_Succeeding_Repha' },
   ],
-  FM: [
-    'Syllable_Modifier'
-  ],
-  GB: [
-    'Consonant_Placeholder',
-    0x2015,
-    0x2022,
-    0x25fb,
-    0x25fc,
-    0x25fd,
-    0x25fe
-  ],
-  H: [
-    'Virama',
-    'Invisible_Stacker'
-  ],
-  HN: [
-    'Number_Joiner'
-  ],
+  FM: ['Syllable_Modifier'],
+  GB: ['Consonant_Placeholder', 0x2015, 0x2022, 0x25fb, 0x25fc, 0x25fd, 0x25fe],
+  H: ['Virama', 'Invisible_Stacker'],
+  HN: ['Number_Joiner'],
   IND: [
     'Consonant_Dead',
     'Modifying_Letter',
-    {UGC: 'Po', U: {not: [0x104e, 0x2022]}}
+    { UGC: 'Po', U: { not: [0x104e, 0x2022] } },
   ],
-  M: [
-    {UISC: 'Consonant_Medial', UGC: {not: 'Lo'}}
-  ],
-  N: [
-    'Brahmi_Joining_Number'
-  ],
-  R: [
-    'Consonant_Preceding_Repha',
-    'Consonant_Prefixed'
-  ],
+  M: [{ UISC: 'Consonant_Medial', UGC: { not: 'Lo' } }],
+  N: ['Brahmi_Joining_Number'],
+  R: ['Consonant_Preceding_Repha', 'Consonant_Prefixed'],
   Rsv: [
-    {UGC: 'Cn'} // TODO
+    { UGC: 'Cn' }, // TODO
   ],
-  S: [
-    {UGC: 'So', U: {not: 0x25cc}},
-    {UGC: 'Sc'}
-  ],
-  SM: [
-    0x1b6b,
-    0x1b6c,
-    0x1b6d,
-    0x1b6e,
-    0x1b6f,
-    0x1b70,
-    0x1b71,
-    0x1b72,
-    0x1b73
-  ],
-  SUB: [
-    {UISC: 'Consonant_Subjoined', UGC: {not: 'Lo'}}
-  ],
+  S: [{ UGC: 'So', U: { not: 0x25cc } }, { UGC: 'Sc' }],
+  SM: [0x1b6b, 0x1b6c, 0x1b6d, 0x1b6e, 0x1b6f, 0x1b70, 0x1b71, 0x1b72, 0x1b73],
+  SUB: [{ UISC: 'Consonant_Subjoined', UGC: { not: 'Lo' } }],
   V: [
-    {UISC: 'Vowel', UGC: {not: 'Lo'}},
-    {UISC: 'Vowel_Dependent', UGC: {not: 'Lo'}},
-    {UISC: 'Pure_Killer'}
+    { UISC: 'Vowel', UGC: { not: 'Lo' } },
+    { UISC: 'Vowel_Dependent', UGC: { not: 'Lo' } },
+    { UISC: 'Pure_Killer' },
   ],
   VM: [
-    {UISC: 'Bindu', UGC: {not: 'Lo'}},
+    { UISC: 'Bindu', UGC: { not: 'Lo' } },
     'Tone_Mark',
     'Cantillation_Mark',
     'Register_Shifter',
-    'Visarga'
+    'Visarga',
   ],
   VS: [
-    0xfe00, 0xfe01, 0xfe02, 0xfe03, 0xfe04, 0xfe05, 0xfe06, 0xfe07,
-    0xfe08, 0xfe09, 0xfe0a, 0xfe0b, 0xfe0c, 0xfe0d, 0xfe0e, 0xfe0f
+    0xfe00, 0xfe01, 0xfe02, 0xfe03, 0xfe04, 0xfe05, 0xfe06, 0xfe07, 0xfe08,
+    0xfe09, 0xfe0a, 0xfe0b, 0xfe0c, 0xfe0d, 0xfe0e, 0xfe0f,
   ],
   WJ: [0x2060],
-  ZWJ: [
-    'Joiner'
-  ],
-  ZWNJ: [
-    'Non_Joiner'
-  ],
-  O: [
-    'Other'
-  ]
+  ZWJ: ['Joiner'],
+  ZWNJ: ['Non_Joiner'],
+  O: ['Other'],
 };
 
 const USE_POSITIONS = {
@@ -145,7 +96,7 @@ const USE_POSITIONS = {
   SM: {
     Abv: ['Top'],
     Blw: ['Bottom'],
-  }
+  },
 };
 
 const UISC_OVERRIDE = {
@@ -157,7 +108,7 @@ const UISC_OVERRIDE = {
   0x1ce6: 'Cantillation_Mark',
   0x1ce7: 'Cantillation_Mark',
   0x1ce8: 'Cantillation_Mark',
-  0x1ced: 'Tone_Mark'
+  0x1ced: 'Tone_Mark',
 };
 
 const UIPC_OVERRIDE = {
@@ -177,7 +128,7 @@ const UIPC_OVERRIDE = {
   0x1cf2: 'Right',
   0x1cf3: 'Right',
   0x1cf8: 'Top',
-  0x1cf9: 'Top'
+  0x1cf9: 'Top',
 };
 
 function check(pattern, value) {
@@ -194,12 +145,12 @@ function check(pattern, value) {
 
 function matches(pattern, code) {
   if (typeof pattern === 'number') {
-    pattern = {U: pattern};
+    pattern = { U: pattern };
   } else if (typeof pattern === 'string') {
-    pattern = {UISC: pattern};
+    pattern = { UISC: pattern };
   }
 
-  for (let key in pattern) {
+  for (const key in pattern) {
     if (!check(pattern[key], code[key])) {
       return false;
     }
@@ -217,10 +168,10 @@ function getUIPC(code) {
 }
 
 function getPositionalCategory(code, USE) {
-  let UIPC = getUIPC(code);
-  let pos = USE_POSITIONS[USE];
+  const UIPC = getUIPC(code);
+  const pos = USE_POSITIONS[USE];
   if (pos) {
-    for (let key in pos) {
+    for (const key in pos) {
       if (pos[key].indexOf(UIPC) !== -1) {
         return USE + key;
       }
@@ -231,9 +182,15 @@ function getPositionalCategory(code, USE) {
 }
 
 function getCategory(code) {
-  for (let category in CATEGORIES) {
-    for (let pattern of CATEGORIES[category]) {
-      if (matches(pattern, {UISC: getUISC(code), UGC: code.category, U: code.code})) {
+  for (const category in CATEGORIES) {
+    for (const pattern of CATEGORIES[category]) {
+      if (
+        matches(pattern, {
+          UISC: getUISC(code),
+          UGC: code.category,
+          U: code.code,
+        })
+      ) {
         return getPositionalCategory(code, category);
       }
     }
@@ -242,30 +199,33 @@ function getCategory(code) {
   return null;
 }
 
-let trie = new UnicodeTrieBuilder;
-let symbols = {};
+const trie = new UnicodeTrieBuilder();
+const symbols = {};
 let numSymbols = 0;
-let decompositions = {};
+const decompositions = {};
 for (let i = 0; i < codepoints.length; i++) {
-  let codepoint = codepoints[i];
+  const codepoint = codepoints[i];
   if (codepoint) {
-    let category = getCategory(codepoint);
+    const category = getCategory(codepoint);
     if (!(category in symbols)) {
       symbols[category] = numSymbols++;
     }
 
     trie.set(codepoint.code, symbols[category]);
 
-    if (codepoint.indicSyllabicCategory === 'Vowel_Dependent' && codepoint.decomposition.length > 0) {
+    if (
+      codepoint.indicSyllabicCategory === 'Vowel_Dependent' &&
+      codepoint.decomposition.length > 0
+    ) {
       decompositions[codepoint.code] = decompose(codepoint.code);
     }
   }
 }
 
 function decompose(code) {
-  let decomposition = [];
-  let codepoint = codepoints[code];
-  for (let c of codepoint.decomposition) {
+  const decomposition = [];
+  const codepoint = codepoints[code];
+  for (const c of codepoint.decomposition) {
     let codes = decompose(c);
     codes = codes.length > 0 ? codes : [c];
     decomposition.push(...codes);
@@ -276,10 +236,16 @@ function decompose(code) {
 
 fs.writeFileSync(__dirname + '/use.trie', trie.toBuffer());
 
-let stateMachine = compile(fs.readFileSync(__dirname + '/use.machine', 'utf8'), symbols);
-let json = Object.assign({
-  categories: Object.keys(symbols),
-  decompositions: decompositions
-}, stateMachine);
+const stateMachine = compile(
+  fs.readFileSync(__dirname + '/use.machine', 'utf8'),
+  symbols
+);
+const json = Object.assign(
+  {
+    categories: Object.keys(symbols),
+    decompositions,
+  },
+  stateMachine
+);
 
 fs.writeFileSync(__dirname + '/use.json', JSON.stringify(json));

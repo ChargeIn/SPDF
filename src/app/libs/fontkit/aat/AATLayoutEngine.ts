@@ -1,9 +1,11 @@
 import * as AATFeatureMap from './AATFeatureMap';
 import AATMorxProcessor from './AATMorxProcessor';
+import TTFFont from '../TTFFont';
 
 export default class AATLayoutEngine {
   morxProcessor: AATMorxProcessor;
   fallbackPosition: boolean;
+  private font: TTFFont;
 
   constructor(font) {
     this.font = font;
@@ -40,9 +42,11 @@ export default class AATLayoutEngine {
   }
 
   _addStrings(glyphs, index, strings, str) {
-    let codePoints = this.font._cmapProcessor.codePointsForGlyph(glyphs[index]);
+    const codePoints = this.font._cmapProcessor.codePointsForGlyph(
+      glyphs[index]
+    );
 
-    for (let codePoint of codePoints) {
+    for (const codePoint of codePoints) {
       const s = str + String.fromCodePoint(codePoint);
       if (index < glyphs.length - 1) {
         this._addStrings(glyphs, index + 1, strings, s);

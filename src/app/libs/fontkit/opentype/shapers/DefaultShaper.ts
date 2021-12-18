@@ -7,7 +7,7 @@ const HORIZONTAL_FEATURES = ['calt', 'clig', 'liga', 'rclt', 'curs', 'kern'];
 const VERTICAL_FEATURES = ['vert'];
 const DIRECTIONAL_FEATURES = {
   ltr: ['ltra', 'ltrm'],
-  rtl: ['rtla', 'rtlm']
+  rtl: ['rtla', 'rtlm'],
 };
 
 export default class DefaultShaper {
@@ -28,7 +28,7 @@ export default class DefaultShaper {
   static planPreprocessing(plan) {
     plan.add({
       global: [...VARIATION_FEATURES, ...DIRECTIONAL_FEATURES[plan.direction]],
-      local: FRACTIONAL_FEATURES
+      local: FRACTIONAL_FEATURES,
     });
   }
 
@@ -44,8 +44,9 @@ export default class DefaultShaper {
   static assignFeatures(plan, glyphs) {
     // Enable contextual fractions
     for (let i = 0; i < glyphs.length; i++) {
-      let glyph = glyphs[i];
-      if (glyph.codePoints[0] === 0x2044) { // fraction slash
+      const glyph = glyphs[i];
+      if (glyph.codePoints[0] === 0x2044) {
+        // fraction slash
         let start = i;
         let end = i + 1;
 
@@ -57,7 +58,10 @@ export default class DefaultShaper {
         }
 
         // Apply denominator
-        while (end < glyphs.length && unicode.isDigit(glyphs[end].codePoints[0])) {
+        while (
+          end < glyphs.length &&
+          unicode.isDigit(glyphs[end].codePoints[0])
+        ) {
           glyphs[end].features.dnom = true;
           glyphs[end].features.frac = true;
           end++;

@@ -1,7 +1,7 @@
 import TTFGlyph from './TTFGlyph';
 import r from 'restructure';
 
-let SBIXImage = new r.Struct({
+const SBIXImage = new r.Struct({
   originX: r.uint16,
   originY: r.uint16,
   type: new r.String(4),
@@ -21,16 +21,17 @@ export default class SBIXGlyph extends TTFGlyph {
    * @return {object}
    */
   getImageForSize(size) {
+    let table;
     for (let i = 0; i < this._font.sbix.imageTables.length; i++) {
-      let table = this._font.sbix.imageTables[i];
+      table = this._font.sbix.imageTables[i];
       if (table.ppem >= size) {
         break;
       }
     }
 
-    let offsets = table.imageOffsets;
-    let start = offsets[this.id];
-    let end = offsets[this.id + 1];
+    const offsets = table.imageOffsets;
+    const start = offsets[this.id];
+    const end = offsets[this.id + 1];
 
     if (start === end) {
       return null;
@@ -41,9 +42,9 @@ export default class SBIXGlyph extends TTFGlyph {
   }
 
   render(ctx, size) {
-    let img = this.getImageForSize(size);
+    const img = this.getImageForSize(size);
     if (img != null) {
-      let scale = size / this._font.unitsPerEm;
+      const scale = size / this._font.unitsPerEm;
       ctx.image(img.data, {
         height: size,
         x: img.originX,

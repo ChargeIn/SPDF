@@ -10,6 +10,7 @@ import WOFF2Directory from './tables/WOFF2Directory';
  * See spec here: http://www.w3.org/TR/WOFF2/
  */
 export default class WOFF2Font extends TTFFont {
+  private stream: r.DecodeStream;
   static probe(buffer) {
     return buffer.toString('ascii', 0, 4) === 'wOF2';
   }
@@ -23,17 +24,17 @@ export default class WOFF2Font extends TTFFont {
     // decompress data and setup table offsets if we haven't already
     if (!this._decompressed) {
       this.stream.pos = this._dataPos;
-      let buffer = this.stream.readBuffer(this.directory.totalCompressedSize);
+      const buffer = this.stream.readBuffer(this.directory.totalCompressedSize);
 
       let decompressedSize = 0;
-      for (let tag in this.directory.tables) {
-        let entry = this.directory.tables[tag];
+      for (const tag in this.directory.tables) {
+        const entry = this.directory.tables[tag];
         entry.offset = decompressedSize;
         decompressedSize +=
           entry.transformLength != null ? entry.transformLength : entry.length;
       }
 
-      let decompressed = brotli(buffer, decompressedSize);
+      const decompressed = brotli(buffer, decompressedSize);
       if (!decompressed) {
         throw new Error('Error decoding compressed data in WOFF2');
       }
@@ -69,22 +70,23 @@ export default class WOFF2Font extends TTFFont {
   _transformGlyfTable() {
     this._decompress();
     this.stream.pos = this.directory.tables.glyf.offset;
-    let table = GlyfTable.decode(this.stream);
-    let glyphs = [];
+    const table = GlyfTable.decode(this.stream);
+    const glyphs = [];
 
+    let instructionSize;
     for (let index = 0; index < table.numGlyphs; index++) {
-      let glyph = {};
-      let nContours = table.nContours.readInt16BE();
+      const glyph = {};
+      const nContours = table.nContours.readInt16BE();
       glyph.numberOfContours = nContours;
 
       if (nContours > 0) {
         // simple glyph
-        let nPoints = [];
+        const nPoints = [];
         let totalPoints = 0;
 
         for (let i = 0; i < nContours; i++) {
-          let r = read255UInt16(table.nPoints);
-          totalPoints += r;
+          const read = read255UInt16(table.nPoints);
+          totalPoints += read;
           nPoints.push(totalPoints);
         }
 
@@ -93,16 +95,16 @@ export default class WOFF2Font extends TTFFont {
           glyph.points[nPoints[i] - 1].endContour = true;
         }
 
-        let instructionSize = read255UInt16(table.glyphs);
+        instructionSize = read255UInt16(table.glyphs);
       } else if (nContours < 0) {
         // composite glyph
-        let haveInstructions = TTFGlyph.prototype._decodeComposite.call(
+        const haveInstructions = TTFGlyph.prototype._decodeComposite.call(
           { _font: this },
           glyph,
           table.composites
         );
         if (haveInstructions) {
-          let instructionSize = read255UInt16(table.glyphs);
+          instructionSize = read255UInt16(table.glyphs);
         }
       }
 
@@ -126,7 +128,7 @@ class Substream {
 }
 
 // This struct represents the entire glyf table
-let GlyfTable = new r.Struct({
+const GlyfTable = new r.Struct({
   version: r.uint32,
   numGlyphs: r.uint16,
   indexFormat: r.uint16,
@@ -152,7 +154,7 @@ const ONE_MORE_BYTE_CODE1 = 255;
 const LOWEST_U_CODE = 253;
 
 function read255UInt16(stream) {
-  let code = stream.readUInt8();
+  const code = stream.readUInt8();
 
   if (code === WORD_CODE) {
     return stream.readUInt16BE();
@@ -176,13 +178,13 @@ function withSign(flag, baseval) {
 function decodeTriplet(flags, glyphs, nPoints) {
   let y;
   let x = (y = 0);
-  let res = [];
+  const res = [];
 
   for (let i = 0; i < nPoints; i++) {
-    let dx = 0,
-      dy = 0;
+    let dx = 0;
+    let dy = 0;
     let flag = flags.readUInt8();
-    let onCurve = !(flag >> 7);
+    const onCurve = !(flag >> 7);
     flag &= 0x7f;
 
     if (flag < 10) {
@@ -192,17 +194,17 @@ function decodeTriplet(flags, glyphs, nPoints) {
       dx = withSign(flag, (((flag - 10) & 14) << 7) + glyphs.readUInt8());
       dy = 0;
     } else if (flag < 84) {
-      let b0 = flag - 20;
-      let b1 = glyphs.readUInt8();
+      const b0 = flag - 20;
+      const b1 = glyphs.readUInt8();
       dx = withSign(flag, 1 + (b0 & 0x30) + (b1 >> 4));
       dy = withSign(flag >> 1, 1 + ((b0 & 0x0c) << 2) + (b1 & 0x0f));
     } else if (flag < 120) {
-      let b0 = flag - 84;
+      const b0 = flag - 84;
       dx = withSign(flag, 1 + ((b0 / 12) << 8) + glyphs.readUInt8());
       dy = withSign(flag >> 1, 1 + ((b0 % 12 >> 2) << 8) + glyphs.readUInt8());
     } else if (flag < 124) {
-      let b1 = glyphs.readUInt8();
-      let b2 = glyphs.readUInt8();
+      const b1 = glyphs.readUInt8();
+      const b2 = glyphs.readUInt8();
       dx = withSign(flag, (b1 << 4) + (b2 >> 4));
       dy = withSign(flag >> 1, ((b2 & 0x0f) << 8) + glyphs.readUInt8());
     } else {

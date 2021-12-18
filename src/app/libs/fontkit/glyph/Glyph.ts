@@ -2,6 +2,7 @@ import { cache } from '../decorators';
 import Path from './Path';
 import unicode from 'unicode-properties';
 import StandardNames from './StandardNames';
+import TTFFont from '../TTFFont';
 
 /**
  * Glyph objects represent a glyph in the font. They have various properties for accessing metrics and
@@ -14,6 +15,9 @@ import StandardNames from './StandardNames';
 export default class Glyph {
   id: number;
   codePoints: number[];
+  _font: TTFFont;
+  isMark: boolean;
+  isLigature: boolean;
 
   constructor(id, codePoints, font) {
     /**
@@ -128,7 +132,7 @@ export default class Glyph {
     };
   }
 
-  _getMetrics(cbox) {
+  _getMetrics(cbox?) {
     if (this._metrics) {
       return this._metrics;
     }
@@ -139,7 +143,7 @@ export default class Glyph {
 
     // For vertical metrics, use vmtx if available, or fall back to global data from OS/2 or hhea
     if (this._font.vmtx) {
-      let { advance: advanceHeight, bearing: topBearing } =
+      const { advance: advanceHeight, bearing: topBearing } =
         this._getTableMetrics(this._font.vmtx);
     } else {
       let os2;
@@ -147,13 +151,15 @@ export default class Glyph {
         ({ cbox } = this);
       }
 
+      let advanceHeight;
+      let topBearing;
       if ((os2 = this._font['OS/2']) && os2.version > 0) {
-        let advanceHeight = Math.abs(os2.typoAscender - os2.typoDescender);
-        let topBearing = os2.typoAscender - cbox.maxY;
+        advanceHeight = Math.abs(os2.typoAscender - os2.typoDescender);
+        topBearing = os2.typoAscender - cbox.maxY;
       } else {
-        let { hhea } = this._font;
-        let advanceHeight = Math.abs(hhea.ascent - hhea.descent);
-        let topBearing = hhea.ascent - cbox.maxY;
+        const { hhea } = this._font;
+        advanceHeight = Math.abs(hhea.ascent - hhea.descent);
+        topBearing = hhea.ascent - cbox.maxY;
       }
     }
 
@@ -173,7 +179,7 @@ export default class Glyph {
   }
 
   _getName() {
-    let { post } = this._font;
+    const { post } = this._font;
     if (!post) {
       return null;
     }
@@ -183,7 +189,7 @@ export default class Glyph {
         return StandardNames[this.id];
 
       case 2:
-        let id = post.glyphNameIndex[this.id];
+        const id = post.glyphNameIndex[this.id];
         if (id < StandardNames.length) {
           return StandardNames[id];
         }

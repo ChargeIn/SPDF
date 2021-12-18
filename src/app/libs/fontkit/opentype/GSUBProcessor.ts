@@ -6,12 +6,12 @@ export default class GSUBProcessor extends OTProcessor {
     switch (lookupType) {
       case 1: {
         // Single Substitution
-        let index = this.coverageIndex(table.coverage);
+        const index = this.coverageIndex(table.coverage);
         if (index === -1) {
           return false;
         }
 
-        let glyph = this.glyphIterator.cur;
+        const glyph = this.glyphIterator.cur;
         switch (table.version) {
           case 1:
             glyph.id = (glyph.id + table.deltaGlyphID) & 0xffff;
@@ -27,9 +27,9 @@ export default class GSUBProcessor extends OTProcessor {
 
       case 2: {
         // Multiple Substitution
-        let index = this.coverageIndex(table.coverage);
+        const index = this.coverageIndex(table.coverage);
         if (index !== -1) {
-          let sequence = table.sequences.get(index);
+          const sequence = table.sequences.get(index);
 
           if (sequence.length === 0) {
             // If the sequence length is zero, delete the glyph.
@@ -41,10 +41,10 @@ export default class GSUBProcessor extends OTProcessor {
           this.glyphIterator.cur.id = sequence[0];
           this.glyphIterator.cur.ligatureComponent = 0;
 
-          let features = this.glyphIterator.cur.features;
-          let curGlyph = this.glyphIterator.cur;
-          let replacement = sequence.slice(1).map((gid, i) => {
-            let glyph = new GlyphInfo(this.font, gid, undefined, features);
+          const features = this.glyphIterator.cur.features;
+          const curGlyph = this.glyphIterator.cur;
+          const replacement = sequence.slice(1).map((gid, i) => {
+            const glyph = new GlyphInfo(this.font, gid, undefined, features);
             glyph.shaperInfo = curGlyph.shaperInfo;
             glyph.isLigated = curGlyph.isLigated;
             glyph.ligatureComponent = i + 1;
@@ -62,9 +62,9 @@ export default class GSUBProcessor extends OTProcessor {
 
       case 3: {
         // Alternate Substitution
-        let index = this.coverageIndex(table.coverage);
+        const index = this.coverageIndex(table.coverage);
         if (index !== -1) {
-          let USER_INDEX = 0; // TODO
+          const USER_INDEX = 0; // TODO
           this.glyphIterator.cur.id = table.alternateSet.get(index)[USER_INDEX];
           return true;
         }
@@ -74,27 +74,27 @@ export default class GSUBProcessor extends OTProcessor {
 
       case 4: {
         // Ligature Substitution
-        let index = this.coverageIndex(table.coverage);
+        const index = this.coverageIndex(table.coverage);
         if (index === -1) {
           return false;
         }
 
-        for (let ligature of table.ligatureSets.get(index)) {
-          let matched = this.sequenceMatchIndices(1, ligature.components);
+        for (const ligature of table.ligatureSets.get(index)) {
+          const matched = this.sequenceMatchIndices(1, ligature.components);
           if (!matched) {
             continue;
           }
 
-          let curGlyph = this.glyphIterator.cur;
+          const curGlyph = this.glyphIterator.cur;
 
           // Concatenate all of the characters the new ligature will represent
-          let characters = curGlyph.codePoints.slice();
-          for (let index of matched) {
+          const characters = curGlyph.codePoints.slice();
+          for (const index of matched) {
             characters.push(...this.glyphs[index].codePoints);
           }
 
           // Create the replacement ligature glyph
-          let ligatureGlyph = new GlyphInfo(
+          const ligatureGlyph = new GlyphInfo(
             this.font,
             ligature.glyph,
             characters,
@@ -142,13 +142,13 @@ export default class GSUBProcessor extends OTProcessor {
 
           // Set ligatureID and ligatureComponent on glyphs that were skipped in the matched sequence.
           // This allows GPOS to attach marks to the correct ligature components.
-          for (let matchIndex of matched) {
+          for (const matchIndex of matched) {
             // Don't assign new ligature components for mark ligatures (see above)
             if (isMarkLigature) {
               idx = matchIndex;
             } else {
               while (idx < matchIndex) {
-                let ligatureComponent =
+                const ligatureComponent =
                   curComps -
                   lastNumComps +
                   Math.min(
@@ -171,7 +171,7 @@ export default class GSUBProcessor extends OTProcessor {
           if (lastLigID && !isMarkLigature) {
             for (let i = idx; i < this.glyphs.length; i++) {
               if (this.glyphs[i].ligatureID === lastLigID) {
-                let ligatureComponent =
+                const ligatureComponent =
                   curComps -
                   lastNumComps +
                   Math.min(this.glyphs[i].ligatureComponent || 1, lastNumComps);

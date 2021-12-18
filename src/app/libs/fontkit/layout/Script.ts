@@ -130,14 +130,14 @@ const UNICODE_SCRIPTS = {
   Yi: 'yi  ',
   Inherited: 'zinh',
   Common: 'zyyy',
-  Unknown: 'zzzz'
+  Unknown: 'zzzz',
 };
 
 const OPENTYPE_SCRIPTS = {};
-for (let script in UNICODE_SCRIPTS) {
-  let tag = UNICODE_SCRIPTS[script];
+for (const script in UNICODE_SCRIPTS) {
+  const tag = UNICODE_SCRIPTS[script];
   if (Array.isArray(tag)) {
-    for (let t of tag) {
+    for (const t of tag) {
       OPENTYPE_SCRIPTS[t] = script;
     }
   } else {
@@ -154,23 +154,23 @@ export function fromOpenType(tag) {
 }
 
 export function forString(string) {
-  let len = string.length;
+  const len = string.length;
   let idx = 0;
   while (idx < len) {
     let code = string.charCodeAt(idx++);
 
     // Check if this is a high surrogate
     if (0xd800 <= code && code <= 0xdbff && idx < len) {
-      let next = string.charCodeAt(idx);
+      const next = string.charCodeAt(idx);
 
       // Check if this is a low surrogate
       if (0xdc00 <= next && next <= 0xdfff) {
         idx++;
-        code = ((code & 0x3FF) << 10) + (next & 0x3FF) + 0x10000;
+        code = ((code & 0x3ff) << 10) + (next & 0x3ff) + 0x10000;
       }
     }
 
-    let script = unicode.getScript(code);
+    const script = unicode.getScript(code);
     if (script !== 'Common' && script !== 'Inherited' && script !== 'Unknown') {
       return UNICODE_SCRIPTS[script];
     }
@@ -181,8 +181,8 @@ export function forString(string) {
 
 export function forCodePoints(codePoints) {
   for (let i = 0; i < codePoints.length; i++) {
-    let codePoint = codePoints[i];
-    let script = unicode.getScript(codePoint);
+    const codePoint = codePoints[i];
+    const script = unicode.getScript(codePoint);
     if (script !== 'Common' && script !== 'Inherited' && script !== 'Unknown') {
       return UNICODE_SCRIPTS[script];
     }
@@ -193,33 +193,33 @@ export function forCodePoints(codePoints) {
 
 // The scripts in this map are written from right to left
 const RTL = {
-  arab: true,   // Arabic
-  hebr: true,   // Hebrew
-  syrc: true,   // Syriac
-  thaa: true,   // Thaana
-  cprt: true,   // Cypriot Syllabary
-  khar: true,   // Kharosthi
-  phnx: true,   // Phoenician
+  arab: true, // Arabic
+  hebr: true, // Hebrew
+  syrc: true, // Syriac
+  thaa: true, // Thaana
+  cprt: true, // Cypriot Syllabary
+  khar: true, // Kharosthi
+  phnx: true, // Phoenician
   'nko ': true, // N'Ko
-  lydi: true,   // Lydian
-  avst: true,   // Avestan
-  armi: true,   // Imperial Aramaic
-  phli: true,   // Inscriptional Pahlavi
-  prti: true,   // Inscriptional Parthian
-  sarb: true,   // Old South Arabian
-  orkh: true,   // Old Turkic, Orkhon Runic
-  samr: true,   // Samaritan
-  mand: true,   // Mandaic, Mandaean
-  merc: true,   // Meroitic Cursive
-  mero: true,   // Meroitic Hieroglyphs
+  lydi: true, // Lydian
+  avst: true, // Avestan
+  armi: true, // Imperial Aramaic
+  phli: true, // Inscriptional Pahlavi
+  prti: true, // Inscriptional Parthian
+  sarb: true, // Old South Arabian
+  orkh: true, // Old Turkic, Orkhon Runic
+  samr: true, // Samaritan
+  mand: true, // Mandaic, Mandaean
+  merc: true, // Meroitic Cursive
+  mero: true, // Meroitic Hieroglyphs
 
   // Unicode 7.0 (not listed on http://www.microsoft.com/typography/otspec/scripttags.htm)
-  mani: true,   // Manichaean
-  mend: true,   // Mende Kikakui
-  nbat: true,   // Nabataean
-  narb: true,   // Old North Arabian
-  palm: true,   // Palmyrene
-  phlp: true    // Psalter Pahlavi
+  mani: true, // Manichaean
+  mend: true, // Mende Kikakui
+  nbat: true, // Nabataean
+  narb: true, // Old North Arabian
+  palm: true, // Palmyrene
+  phlp: true, // Psalter Pahlavi
 };
 
 export function direction(script) {

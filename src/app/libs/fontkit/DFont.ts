@@ -67,8 +67,9 @@ export default class DFont {
   static probe(buffer) {
     const stream = new r.DecodeStream(buffer);
 
+    let header;
     try {
-      const header = DFontHeader.decode(stream);
+      header = DFontHeader.decode(stream);
     } catch (e) {
       return false;
     }

@@ -17,8 +17,8 @@ export default class AATLookupTable {
         let max = this.table.binarySearchHeader.nUnits - 1;
 
         while (min <= max) {
-          let mid = (min + max) >> 1;
-          let seg = this.table.segments[mid];
+          const mid = (min + max) >> 1;
+          const seg = this.table.segments[mid];
 
           // special end of search value
           if (seg.firstGlyph === 0xffff) {
@@ -47,8 +47,8 @@ export default class AATLookupTable {
         let max = this.table.binarySearchHeader.nUnits - 1;
 
         while (min <= max) {
-          let mid = (min + max) >> 1;
-          let seg = this.table.segments[mid];
+          const mid = (min + max) >> 1;
+          const seg = this.table.segments[mid];
 
           // special end of search value
           if (seg.glyph === 0xffff) {
@@ -77,12 +77,12 @@ export default class AATLookupTable {
 
   @cache
   glyphsForValue(classValue) {
-    let res = [];
+    const res = [];
 
     switch (this.table.version) {
       case 2: // segment format
       case 4: {
-        for (let segment of this.table.segments) {
+        for (const segment of this.table.segments) {
           if (this.table.version === 2 && segment.value === classValue) {
             res.push(...range(segment.firstGlyph, segment.lastGlyph + 1));
           } else {
@@ -99,7 +99,7 @@ export default class AATLookupTable {
 
       case 6: {
         // lookup single
-        for (let segment of this.table.segments) {
+        for (const segment of this.table.segments) {
           if (segment.value === classValue) {
             res.push(segment.glyph);
           }

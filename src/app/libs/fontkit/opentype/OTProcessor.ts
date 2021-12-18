@@ -38,11 +38,11 @@ export default class OTProcessor {
     }
 
     if (!Array.isArray(script)) {
-      script = [ script ];
+      script = [script];
     }
 
-    for (let s of script) {
-      for (let entry of this.table.scriptList) {
+    for (const s of script) {
+      for (const entry of this.table.scriptList) {
         if (entry.tag === s) {
           return entry;
         }
@@ -83,7 +83,7 @@ export default class OTProcessor {
     if (!language || language !== this.languageTag) {
       this.language = null;
 
-      for (let lang of this.script.langSysRecords) {
+      for (const lang of this.script.langSysRecords) {
         if (lang.tag === language) {
           this.language = lang.langSys;
           this.languageTag = lang.tag;
@@ -103,9 +103,10 @@ export default class OTProcessor {
     if (changed) {
       this.features = {};
       if (this.language) {
-        for (let featureIndex of this.language.featureIndexes) {
-          let record = this.table.featureList[featureIndex];
-          let substituteFeature = this.substituteFeatureForVariations(featureIndex);
+        for (const featureIndex of this.language.featureIndexes) {
+          const record = this.table.featureList[featureIndex];
+          const substituteFeature =
+            this.substituteFeatureForVariations(featureIndex);
           this.features[record.tag] = substituteFeature || record.feature;
         }
       }
@@ -115,14 +116,14 @@ export default class OTProcessor {
   }
 
   lookupsForFeatures(userFeatures = [], exclude) {
-    let lookups = [];
-    for (let tag of userFeatures) {
-      let feature = this.features[tag];
+    const lookups = [];
+    for (const tag of userFeatures) {
+      const feature = this.features[tag];
       if (!feature) {
         continue;
       }
 
-      for (let lookupIndex of feature.lookupListIndexes) {
+      for (const lookupIndex of feature.lookupListIndexes) {
         if (exclude && exclude.indexOf(lookupIndex) !== -1) {
           continue;
         }
@@ -130,7 +131,7 @@ export default class OTProcessor {
         lookups.push({
           feature: tag,
           index: lookupIndex,
-          lookup: this.table.lookupList.get(lookupIndex)
+          lookup: this.table.lookupList.get(lookupIndex),
         });
       }
     }
@@ -144,9 +145,12 @@ export default class OTProcessor {
       return null;
     }
 
-    let record = this.table.featureVariations.featureVariationRecords[this.variationsIndex];
-    let substitutions = record.featureTableSubstitution.substitutions;
-    for (let substitution of substitutions) {
+    const record =
+      this.table.featureVariations.featureVariationRecords[
+        this.variationsIndex
+      ];
+    const substitutions = record.featureTableSubstitution.substitutions;
+    for (const substitution of substitutions) {
       if (substitution.featureIndex === featureIndex) {
         return substitution.alternateFeatureTable;
       }
@@ -156,14 +160,14 @@ export default class OTProcessor {
   }
 
   findVariationsIndex(coords) {
-    let variations = this.table.featureVariations;
+    const variations = this.table.featureVariations;
     if (!variations) {
       return -1;
     }
 
-    let records = variations.featureVariationRecords;
+    const records = variations.featureVariationRecords;
     for (let i = 0; i < records.length; i++) {
-      let conditions = records[i].conditionSet.conditionTable;
+      const conditions = records[i].conditionSet.conditionTable;
       if (this.variationConditionsMatch(conditions, coords)) {
         return i;
       }
@@ -173,14 +177,18 @@ export default class OTProcessor {
   }
 
   variationConditionsMatch(conditions, coords) {
-    return conditions.every(condition => {
-      let coord = condition.axisIndex < coords.length ? coords[condition.axisIndex] : 0;
-      return condition.filterRangeMinValue <= coord && coord <= condition.filterRangeMaxValue;
+    return conditions.every((condition) => {
+      const coord =
+        condition.axisIndex < coords.length ? coords[condition.axisIndex] : 0;
+      return (
+        condition.filterRangeMinValue <= coord &&
+        coord <= condition.filterRangeMaxValue
+      );
     });
   }
 
   applyFeatures(userFeatures, glyphs, advances) {
-    let lookups = this.lookupsForFeatures(userFeatures);
+    const lookups = this.lookupsForFeatures(userFeatures);
     this.applyLookups(lookups, glyphs, advances);
   }
 
@@ -189,7 +197,7 @@ export default class OTProcessor {
     this.positions = positions;
     this.glyphIterator = new GlyphIterator(glyphs);
 
-    for (let {feature, lookup} of lookups) {
+    for (const { feature, lookup } of lookups) {
       this.currentFeature = feature;
       this.glyphIterator.reset(lookup.flags);
 
@@ -199,8 +207,8 @@ export default class OTProcessor {
           continue;
         }
 
-        for (let table of lookup.subTables) {
-          let res = this.applyLookup(lookup.lookupType, table);
+        for (const table of lookup.subTables) {
+          const res = this.applyLookup(lookup.lookupType, table);
           if (res) {
             break;
           }
@@ -212,24 +220,24 @@ export default class OTProcessor {
   }
 
   applyLookup(lookup, table) {
-    throw new Error("applyLookup must be implemented by subclasses");
+    throw new Error('applyLookup must be implemented by subclasses');
   }
 
   applyLookupList(lookupRecords) {
-    let options = this.glyphIterator.options;
-    let glyphIndex = this.glyphIterator.index;
+    const options = this.glyphIterator.options;
+    const glyphIndex = this.glyphIterator.index;
 
-    for (let lookupRecord of lookupRecords) {
+    for (const lookupRecord of lookupRecords) {
       // Reset flags and find glyph index for this lookup record
       this.glyphIterator.reset(options, glyphIndex);
       this.glyphIterator.increment(lookupRecord.sequenceIndex);
 
       // Get the lookup and setup flags for subtables
-      let lookup = this.table.lookupList.get(lookupRecord.lookupListIndex);
+      const lookup = this.table.lookupList.get(lookupRecord.lookupListIndex);
       this.glyphIterator.reset(lookup.flags, this.glyphIterator.index);
 
       // Apply lookup subtables until one matches
-      for (let table of lookup.subTables) {
+      for (const table of lookup.subTables) {
         if (this.applyLookup(lookup.lookupType, table)) {
           break;
         }
@@ -250,7 +258,7 @@ export default class OTProcessor {
         return coverage.glyphs.indexOf(glyph);
 
       case 2:
-        for (let range of coverage.rangeRecords) {
+        for (const range of coverage.rangeRecords) {
           if (range.start <= glyph && glyph <= range.end) {
             return range.startCoverageIndex + glyph - range.start;
           }
@@ -263,7 +271,7 @@ export default class OTProcessor {
   }
 
   match(sequenceIndex, sequence, fn, matched) {
-    let pos = this.glyphIterator.index;
+    const pos = this.glyphIterator.index;
     let glyph = this.glyphIterator.increment(sequenceIndex);
     let idx = 0;
 
@@ -285,30 +293,41 @@ export default class OTProcessor {
   }
 
   sequenceMatches(sequenceIndex, sequence) {
-    return this.match(sequenceIndex, sequence, (component, glyph) => component === glyph.id);
+    return this.match(
+      sequenceIndex,
+      sequence,
+      (component, glyph) => component === glyph.id
+    );
   }
 
   sequenceMatchIndices(sequenceIndex, sequence) {
-    return this.match(sequenceIndex, sequence, (component, glyph) => {
-      // If the current feature doesn't apply to this glyph,
-      if (!(this.currentFeature in glyph.features)) {
-        return false;
-      }
+    return this.match(
+      sequenceIndex,
+      sequence,
+      (component, glyph) => {
+        // If the current feature doesn't apply to this glyph,
+        if (!(this.currentFeature in glyph.features)) {
+          return false;
+        }
 
-      return component === glyph.id;
-    }, []);
+        return component === glyph.id;
+      },
+      []
+    );
   }
 
   coverageSequenceMatches(sequenceIndex, sequence) {
-    return this.match(sequenceIndex, sequence, (coverage, glyph) =>
-      this.coverageIndex(coverage, glyph.id) >= 0
+    return this.match(
+      sequenceIndex,
+      sequence,
+      (coverage, glyph) => this.coverageIndex(coverage, glyph.id) >= 0
     );
   }
 
   getClassID(glyph, classDef) {
     switch (classDef.version) {
       case 1: // Class array
-        let i = glyph - classDef.startGlyph;
+        const i = glyph - classDef.startGlyph;
         if (i >= 0 && i < classDef.classValueArray.length) {
           return classDef.classValueArray[i];
         }
@@ -316,7 +335,7 @@ export default class OTProcessor {
         break;
 
       case 2:
-        for (let range of classDef.classRangeRecord) {
+        for (const range of classDef.classRangeRecord) {
           if (range.start <= glyph && glyph <= range.end) {
             return range.class;
           }
@@ -329,8 +348,10 @@ export default class OTProcessor {
   }
 
   classSequenceMatches(sequenceIndex, sequence, classDef) {
-    return this.match(sequenceIndex, sequence, (classID, glyph) =>
-      classID === this.getClassID(glyph.id, classDef)
+    return this.match(
+      sequenceIndex,
+      sequence,
+      (classID, glyph) => classID === this.getClassID(glyph.id, classDef)
     );
   }
 
@@ -343,7 +364,7 @@ export default class OTProcessor {
         }
 
         let set = table.ruleSets[index];
-        for (let rule of set) {
+        for (const rule of set) {
           if (this.sequenceMatches(1, rule.input)) {
             return this.applyLookupList(rule.lookupRecords);
           }
@@ -362,7 +383,7 @@ export default class OTProcessor {
         }
 
         set = table.classSet[index];
-        for (let rule of set) {
+        for (const rule of set) {
           if (this.classSequenceMatches(1, rule.classes, table.classDef)) {
             return this.applyLookupList(rule.lookupRecords);
           }
@@ -389,11 +410,13 @@ export default class OTProcessor {
           return false;
         }
 
-        let set = table.chainRuleSets[index];
-        for (let rule of set) {
-          if (this.sequenceMatches(-rule.backtrack.length, rule.backtrack)
-              && this.sequenceMatches(1, rule.input)
-              && this.sequenceMatches(1 + rule.input.length, rule.lookahead)) {
+        const set = table.chainRuleSets[index];
+        for (const rule of set) {
+          if (
+            this.sequenceMatches(-rule.backtrack.length, rule.backtrack) &&
+            this.sequenceMatches(1, rule.input) &&
+            this.sequenceMatches(1 + rule.input.length, rule.lookahead)
+          ) {
             return this.applyLookupList(rule.lookupRecords);
           }
         }
@@ -406,15 +429,25 @@ export default class OTProcessor {
         }
 
         index = this.getClassID(this.glyphIterator.cur.id, table.inputClassDef);
-        let rules = table.chainClassSet[index];
+        const rules = table.chainClassSet[index];
         if (!rules) {
           return false;
         }
 
-        for (let rule of rules) {
-          if (this.classSequenceMatches(-rule.backtrack.length, rule.backtrack, table.backtrackClassDef) &&
-              this.classSequenceMatches(1, rule.input, table.inputClassDef) &&
-              this.classSequenceMatches(1 + rule.input.length, rule.lookahead, table.lookaheadClassDef)) {
+        for (const rule of rules) {
+          if (
+            this.classSequenceMatches(
+              -rule.backtrack.length,
+              rule.backtrack,
+              table.backtrackClassDef
+            ) &&
+            this.classSequenceMatches(1, rule.input, table.inputClassDef) &&
+            this.classSequenceMatches(
+              1 + rule.input.length,
+              rule.lookahead,
+              table.lookaheadClassDef
+            )
+          ) {
             return this.applyLookupList(rule.lookupRecords);
           }
         }
@@ -422,9 +455,17 @@ export default class OTProcessor {
         break;
 
       case 3:
-        if (this.coverageSequenceMatches(-table.backtrackGlyphCount, table.backtrackCoverage) &&
-            this.coverageSequenceMatches(0, table.inputCoverage) &&
-            this.coverageSequenceMatches(table.inputGlyphCount, table.lookaheadCoverage)) {
+        if (
+          this.coverageSequenceMatches(
+            -table.backtrackGlyphCount,
+            table.backtrackCoverage
+          ) &&
+          this.coverageSequenceMatches(0, table.inputCoverage) &&
+          this.coverageSequenceMatches(
+            table.inputGlyphCount,
+            table.lookaheadCoverage
+          )
+        ) {
           return this.applyLookupList(table.lookupRecords);
         }
 

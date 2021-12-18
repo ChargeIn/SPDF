@@ -4,8 +4,10 @@ import UnicodeTrie from 'unicode-trie';
 import GlyphInfo from '../GlyphInfo';
 import useData from './use.json';
 
-const {categories, decompositions} = useData;
-const trie = new UnicodeTrie(require('fs').readFileSync(__dirname + '/use.trie'));
+const { categories, decompositions } = useData;
+const trie = new UnicodeTrie(
+  require('fs').readFileSync(__dirname + '/use.trie')
+);
 const stateMachine = new StateMachine(useData);
 
 /**
@@ -45,10 +47,10 @@ export default class UniversalShaper extends DefaultShaper {
     // Decompose split vowels
     // TODO: do this in a more general unicode normalizer
     for (let i = glyphs.length - 1; i >= 0; i--) {
-      let codepoint = glyphs[i].codePoints[0];
+      const codepoint = glyphs[i].codePoints[0];
       if (decompositions[codepoint]) {
-        let decomposed = decompositions[codepoint].map(c => {
-          let g = plan.font.glyphForCodePoint(c);
+        const decomposed = decompositions[codepoint].map((c) => {
+          const g = plan.font.glyphForCodePoint(c);
           return new GlyphInfo(plan.font, g.id, [c], glyphs[i].features);
         });
 
@@ -72,16 +74,23 @@ class USEInfo {
 
 function setupSyllables(font, glyphs) {
   let syllable = 0;
-  for (let [start, end, tags] of stateMachine.match(glyphs.map(useCategory))) {
+  for (const [start, end, tags] of stateMachine.match(
+    glyphs.map(useCategory)
+  )) {
     ++syllable;
 
     // Create shaper info
     for (let i = start; i <= end; i++) {
-      glyphs[i].shaperInfo = new USEInfo(categories[useCategory(glyphs[i])], tags[0], syllable);
+      glyphs[i].shaperInfo = new USEInfo(
+        categories[useCategory(glyphs[i])],
+        tags[0],
+        syllable
+      );
     }
 
     // Assign rphf feature
-    let limit = glyphs[start].shaperInfo.category === 'R' ? 1 : Math.min(3, end - start);
+    const limit =
+      glyphs[start].shaperInfo.category === 'R' ? 1 : Math.min(3, end - start);
     for (let i = start; i < start + limit; i++) {
       glyphs[i].features.rphf = true;
     }
@@ -89,13 +98,13 @@ function setupSyllables(font, glyphs) {
 }
 
 function clearSubstitutionFlags(font, glyphs) {
-  for (let glyph of glyphs) {
+  for (const glyph of glyphs) {
     glyph.substituted = false;
   }
 }
 
 function recordRphf(font, glyphs) {
-  for (let glyph of glyphs) {
+  for (const glyph of glyphs) {
     if (glyph.substituted && glyph.features.rphf) {
       // Mark a substituted repha.
       glyph.shaperInfo.category = 'R';
@@ -104,7 +113,7 @@ function recordRphf(font, glyphs) {
 }
 
 function recordPref(font, glyphs) {
-  for (let glyph of glyphs) {
+  for (const glyph of glyphs) {
     if (glyph.substituted) {
       // Mark a substituted pref as VPre, as they behave the same way.
       glyph.shaperInfo.category = 'VPre';
@@ -113,25 +122,34 @@ function recordPref(font, glyphs) {
 }
 
 function reorder(font, glyphs) {
-  let dottedCircle = font.glyphForCodePoint(0x25cc).id;
+  const dottedCircle = font.glyphForCodePoint(0x25cc).id;
 
-  for (let start = 0, end = nextSyllable(glyphs, 0); start < glyphs.length; start = end, end = nextSyllable(glyphs, start)) {
-    let i, j;
+  for (
+    let start = 0, end = nextSyllable(glyphs, 0);
+    start < glyphs.length;
+    start = end, end = nextSyllable(glyphs, start)
+  ) {
+    let i;
+    let j;
     let info = glyphs[start].shaperInfo;
-    let type = info.syllableType;
+    const type = info.syllableType;
 
     // Only a few syllable types need reordering.
-    if (type !== 'virama_terminated_cluster' && type !== 'standard_cluster' && type !== 'broken_cluster') {
+    if (
+      type !== 'virama_terminated_cluster' &&
+      type !== 'standard_cluster' &&
+      type !== 'broken_cluster'
+    ) {
       continue;
     }
 
     // Insert a dotted circle glyph in broken clusters.
     if (type === 'broken_cluster' && dottedCircle) {
-      let g = new GlyphInfo(font, dottedCircle, [0x25cc]);
+      const g = new GlyphInfo(font, dottedCircle, [0x25cc]);
       g.shaperInfo = info;
 
       // Insert after possible Repha.
-      for (i = start; i < end && glyphs[i].shaperInfo.category === 'R'; i++);
+      for (i = start; i < end && glyphs[i].shaperInfo.category === 'R'; i++) {}
       glyphs.splice(++i, 0, g);
       end++;
     }
@@ -148,7 +166,12 @@ function reorder(font, glyphs) {
             i--;
           }
 
-          glyphs.splice(start, 0, ...glyphs.splice(start + 1, i - start), glyphs[i]);
+          glyphs.splice(
+            start,
+            0,
+            ...glyphs.splice(start + 1, i - start),
+            glyphs[i]
+          );
           break;
         }
       }
@@ -161,7 +184,10 @@ function reorder(font, glyphs) {
         // If we hit a halant, move after it; otherwise it's a base: move to it's
         // place, and shift things in between backward.
         j = isHalant(glyphs[i]) ? i + 1 : i;
-      } else if ((info.category === 'VPre' || info.category === 'VMPre') && j < i) {
+      } else if (
+        (info.category === 'VPre' || info.category === 'VMPre') &&
+        j < i
+      ) {
         glyphs.splice(j, 1, glyphs[i], ...glyphs.splice(j, i - j));
       }
     }
@@ -169,9 +195,14 @@ function reorder(font, glyphs) {
 }
 
 function nextSyllable(glyphs, start) {
-  if (start >= glyphs.length) return start;
-  let syllable = glyphs[start].shaperInfo.syllable;
-  while (++start < glyphs.length && glyphs[start].shaperInfo.syllable === syllable);
+  if (start >= glyphs.length) {
+    return start;
+  }
+  const syllable = glyphs[start].shaperInfo.syllable;
+  while (
+    ++start < glyphs.length &&
+    glyphs[start].shaperInfo.syllable === syllable
+  ) {}
   return start;
 }
 

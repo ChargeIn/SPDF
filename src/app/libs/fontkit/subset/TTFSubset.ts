@@ -13,14 +13,14 @@ export default class TTFSubset extends Subset {
   }
 
   _addGlyph(gid) {
-    let glyph = this.font.getGlyph(gid);
-    let glyf = glyph._decode();
+    const glyph = this.font.getGlyph(gid);
+    const glyf = glyph._decode();
 
     // get the offset to the glyph from the loca table
-    let curOffset = this.font.loca.offsets[gid];
-    let nextOffset = this.font.loca.offsets[gid + 1];
+    const curOffset = this.font.loca.offsets[gid];
+    const nextOffset = this.font.loca.offsets[gid + 1];
 
-    let stream = this.font._getTableStream('glyf');
+    const stream = this.font._getTableStream('glyf');
     stream.pos += curOffset;
 
     let buffer = stream.readBuffer(nextOffset - curOffset);
@@ -28,7 +28,7 @@ export default class TTFSubset extends Subset {
     // if it is a compound glyph, include its components
     if (glyf && glyf.numberOfContours < 0) {
       buffer = new Buffer(buffer);
-      for (let component of glyf.components) {
+      for (const component of glyf.components) {
         gid = this.includeGlyph(component.glyphID);
         buffer.writeUInt16BE(gid, component.pos);
       }

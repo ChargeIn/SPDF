@@ -35,30 +35,7 @@
         "jsdoc/newline-after-description": "off",
         "jsdoc/no-types": "off",
         "id-blacklist": "off",
-        "@typescript-eslint/naming-convention": [
-          "error",
-          {
-            "selector": "default",
-            "format": ["camelCase", "PascalCase", "snake_case", "UPPER_CASE"],
-            "leadingUnderscore": "allow"
-          },
-          {
-            "selector": "memberLike",
-            "modifiers": ["private"],
-            "format": ["camelCase"],
-            "leadingUnderscore": "require"
-          },
-          {
-            "selector": "property",
-            "format": ["camelCase", "PascalCase"]
-          },
-          {
-            "selector": "property",
-            "modifiers": ["private"],
-            "format": ["camelCase", "PascalCase"],
-            "leadingUnderscore": "require"
-          }
-        ],
+        "@typescript-eslint/naming-convention": "off",
         "prefer-arrow/prefer-arrow-functions": 0,
         "@angular-eslint/directive-selector":  0,
         "@angular-eslint/component-selector": [

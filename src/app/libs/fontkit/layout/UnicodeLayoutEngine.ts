@@ -1,4 +1,6 @@
 import unicode from 'unicode-properties';
+import TTFFont from '../TTFFont';
+import Glyph from '../glyph/Glyph';
 
 /**
  * This class is used when GPOS does not define 'mark' or 'mkmk' features
@@ -9,17 +11,20 @@ import unicode from 'unicode-properties';
  * https://github.com/behdad/harfbuzz/blob/master/src/hb-ot-shape-fallback.cc
  */
 export default class UnicodeLayoutEngine {
-  constructor(font) {
+  font: TTFFont;
+
+  constructor(font: TTFFont) {
     this.font = font;
   }
 
-  positionGlyphs(glyphs, positions) {
+  positionGlyphs(glyphs: Glyph[], positions) {
     // find each base + mark cluster, and position the marks relative to the base
     let clusterStart = 0;
     let clusterEnd = 0;
     for (let index = 0; index < glyphs.length; index++) {
-      let glyph = glyphs[index];
-      if (glyph.isMark) { // TODO: handle ligatures
+      const glyph = glyphs[index];
+      if (glyph.isMark) {
+        // TODO: handle ligatures
         clusterEnd = index;
       } else {
         if (clusterStart !== clusterEnd) {
@@ -37,27 +42,28 @@ export default class UnicodeLayoutEngine {
     return positions;
   }
 
-  positionCluster(glyphs, positions, clusterStart, clusterEnd) {
-    let base = glyphs[clusterStart];
-    let baseBox = base.cbox.copy();
+  positionCluster(glyphs: Glyph[], positions, clusterStart, clusterEnd) {
+    const base = glyphs[clusterStart];
+    const baseBox = base.cbox.copy();
 
     // adjust bounding box for ligature glyphs
     if (base.codePoints.length > 1) {
       // LTR. TODO: RTL support.
-      baseBox.minX += ((base.codePoints.length - 1) * baseBox.width) / base.codePoints.length;
+      baseBox.minX +=
+        ((base.codePoints.length - 1) * baseBox.width) / base.codePoints.length;
     }
 
     let xOffset = -positions[clusterStart].xAdvance;
     let yOffset = 0;
-    let yGap = this.font.unitsPerEm / 16;
+    const yGap = this.font.unitsPerEm / 16;
 
     // position each of the mark glyphs relative to the base glyph
     for (let index = clusterStart + 1; index <= clusterEnd; index++) {
-      let mark = glyphs[index];
-      let markBox = mark.cbox;
-      let position = positions[index];
+      const mark = glyphs[index];
+      const markBox = mark.cbox;
+      const position = positions[index];
 
-      let combiningClass = this.getCombiningClass(mark.codePoints[0]);
+      const combiningClass = this.getCombiningClass(mark.codePoints[0]);
 
       if (combiningClass !== 'Not_Reordered') {
         position.xOffset = position.yOffset = 0;
@@ -84,9 +90,11 @@ export default class UnicodeLayoutEngine {
             position.xOffset += baseBox.maxX - markBox.width - markBox.minX;
             break;
 
-          default: // Attached_Below, Attached_Above, Below, Above, other
+          default:
+            // Attached_Below, Attached_Above, Below, Above, other
             // center align
-            position.xOffset += baseBox.minX + (baseBox.width - markBox.width) / 2 - markBox.minX;
+            position.xOffset +=
+              baseBox.minX + (baseBox.width - markBox.width) / 2 - markBox.minX;
         }
 
         // y positioning
@@ -98,7 +106,10 @@ export default class UnicodeLayoutEngine {
           case 'Attached_Below_Left':
           case 'Attached_Below':
             // add a small gap between the glyphs if they are not attached
-            if (combiningClass === 'Attached_Below_Left' || combiningClass === 'Attached_Below') {
+            if (
+              combiningClass === 'Attached_Below_Left' ||
+              combiningClass === 'Attached_Below'
+            ) {
               baseBox.minY += yGap;
             }
 
@@ -113,7 +124,10 @@ export default class UnicodeLayoutEngine {
           case 'Attached_Above':
           case 'Attached_Above_Right':
             // add a small gap between the glyphs if they are not attached
-            if (combiningClass === 'Attached_Above' || combiningClass === 'Attached_Above_Right') {
+            if (
+              combiningClass === 'Attached_Above' ||
+              combiningClass === 'Attached_Above_Right'
+            ) {
               baseBox.maxY += yGap;
             }
 
@@ -125,7 +139,6 @@ export default class UnicodeLayoutEngine {
         position.xAdvance = position.yAdvance = 0;
         position.xOffset += xOffset;
         position.yOffset += yOffset;
-
       } else {
         xOffset -= position.xAdvance;
         yOffset -= position.yAdvance;
@@ -136,7 +149,7 @@ export default class UnicodeLayoutEngine {
   }
 
   getCombiningClass(codePoint) {
-    let combiningClass = unicode.getCombiningClass(codePoint);
+    const combiningClass = unicode.getCombiningClass(codePoint);
 
     // Thai / Lao need some per-character work
     if ((codePoint & ~0xff) === 0x0e00) {
@@ -166,7 +179,8 @@ export default class UnicodeLayoutEngine {
           case 0x0ebc:
             return 'Below';
         }
-      } else if (codePoint === 0x0e3a) { // virama
+      } else if (codePoint === 0x0e3a) {
+        // virama
         return 'Below_Right';
       }
     }

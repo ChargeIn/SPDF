@@ -15,10 +15,10 @@ class COLRLayer {
  */
 export default class COLRGlyph extends Glyph {
   _getBBox() {
-    let bbox = new BBox();
+    const bbox = new BBox();
     for (let i = 0; i < this.layers.length; i++) {
-      let layer = this.layers[i];
-      let b = layer.glyph.bbox;
+      const layer = this.layers[i];
+      const b = layer.glyph.bbox;
       bbox.addPoint(b.minX, b.minY);
       bbox.addPoint(b.maxX, b.maxY);
     }
@@ -32,21 +32,22 @@ export default class COLRGlyph extends Glyph {
    * @type {object[]}
    */
   get layers() {
-    let cpal = this._font.CPAL;
-    let colr = this._font.COLR;
+    const cpal = this._font.CPAL;
+    const colr = this._font.COLR;
     let low = 0;
     let high = colr.baseGlyphRecord.length - 1;
+    let baseLayer;
 
     while (low <= high) {
-      let mid = (low + high) >> 1;
-      let rec = colr.baseGlyphRecord[mid];
+      const mid = (low + high) >> 1;
+      const rec = colr.baseGlyphRecord[mid];
 
       if (this.id < rec.gid) {
         high = mid - 1;
       } else if (this.id > rec.gid) {
         low = mid + 1;
       } else {
-        let baseLayer = rec;
+        baseLayer = rec;
         break;
       }
     }
@@ -54,8 +55,8 @@ export default class COLRGlyph extends Glyph {
     // if base glyph not found in COLR table,
     // default to normal glyph from glyf or CFF
     if (baseLayer == null) {
-      let g = this._font._getBaseGlyph(this.id);
-      let color = {
+      const g = this._font._getBaseGlyph(this.id);
+      const color = {
         red: 0,
         green: 0,
         blue: 0,
@@ -66,15 +67,15 @@ export default class COLRGlyph extends Glyph {
     }
 
     // otherwise, return an array of all the layers
-    let layers = [];
+    const layers = [];
     for (
       let i = baseLayer.firstLayerIndex;
       i < baseLayer.firstLayerIndex + baseLayer.numLayers;
       i++
     ) {
-      let rec = colr.layerRecords[i];
-      let color = cpal.colorRecords[rec.paletteIndex];
-      let g = this._font._getBaseGlyph(rec.gid);
+      const rec = colr.layerRecords[i];
+      const color = cpal.colorRecords[rec.paletteIndex];
+      const g = this._font._getBaseGlyph(rec.gid);
       layers.push(new COLRLayer(g, color));
     }
 
@@ -82,7 +83,7 @@ export default class COLRGlyph extends Glyph {
   }
 
   render(ctx, size) {
-    for (let { glyph, color } of this.layers) {
+    for (const { glyph, color } of this.layers) {
       ctx.fillColor(
         [color.red, color.green, color.blue],
         (color.alpha / 255) * 100

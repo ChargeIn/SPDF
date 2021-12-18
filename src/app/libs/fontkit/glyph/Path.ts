@@ -15,36 +15,14 @@ const SVG_COMMANDS = {
  * render the path to a graphics context.
  */
 export default class Path {
+  _bbox: BBox;
+  _cbox: BBox;
+  commands: { command: string; args: number[] }[];
+
   constructor() {
     this.commands = [];
     this._bbox = null;
     this._cbox = null;
-  }
-
-  /**
-   * Compiles the path to a JavaScript function that can be applied with
-   * a graphics context in order to render the path.
-   * @return {string}
-   */
-  toFunction() {
-    return (ctx) => {
-      this.commands.forEach((c) => {
-        return ctx[c.command].apply(ctx, c.args);
-      });
-    };
-  }
-
-  /**
-   * Converts the path to an SVG path data string
-   * @return {string}
-   */
-  toSVG() {
-    let cmds = this.commands.map((c) => {
-      let args = c.args.map((arg) => Math.round(arg * 100) / 100);
-      return `${SVG_COMMANDS[c.command]}${args.join(' ')}`;
-    });
-
-    return cmds.join('');
   }
 
   /**
@@ -56,8 +34,8 @@ export default class Path {
    */
   get cbox() {
     if (!this._cbox) {
-      let cbox = new BBox();
-      for (let command of this.commands) {
+      const cbox = new BBox();
+      for (const command of this.commands) {
         for (let i = 0; i < command.args.length; i += 2) {
           cbox.addPoint(command.args[i], command.args[i + 1]);
         }
@@ -75,25 +53,39 @@ export default class Path {
    * @type {BBox}
    */
   get bbox() {
+    let i;
     if (this._bbox) {
       return this._bbox;
     }
 
-    let bbox = new BBox();
-    let cx = 0,
-      cy = 0;
+    const bbox = new BBox();
+    let cx = 0;
+    let cy = 0;
 
-    let f = (t) =>
+    let p0;
+    let p1;
+    let p2;
+    let p3;
+    let qp1x;
+    let qp1y;
+    let cp1x;
+    let cp1y;
+    let cp2x;
+    let cp2y;
+    let p3x;
+    let p3y;
+
+    const f = (t) =>
       Math.pow(1 - t, 3) * p0[i] +
       3 * Math.pow(1 - t, 2) * t * p1[i] +
       3 * (1 - t) * Math.pow(t, 2) * p2[i] +
       Math.pow(t, 3) * p3[i];
 
-    for (let c of this.commands) {
+    for (const c of this.commands) {
       switch (c.command) {
         case 'moveTo':
         case 'lineTo':
-          let [x, y] = c.args;
+          const [x, y] = c.args;
           bbox.addPoint(x, y);
           cx = x;
           cy = y;
@@ -103,34 +95,34 @@ export default class Path {
         case 'bezierCurveTo':
           if (c.command === 'quadraticCurveTo') {
             // http://fontforge.org/bezier.html
-            let [qp1x, qp1y, p3x, p3y] = c.args;
-            let cp1x = cx + (2 / 3) * (qp1x - cx); // CP1 = QP0 + 2/3 * (QP1-QP0)
-            let cp1y = cy + (2 / 3) * (qp1y - cy);
-            let cp2x = p3x + (2 / 3) * (qp1x - p3x); // CP2 = QP2 + 2/3 * (QP1-QP2)
-            let cp2y = p3y + (2 / 3) * (qp1y - p3y);
+            [qp1x, qp1y, p3x, p3y] = c.args;
+            cp1x = cx + (2 / 3) * (qp1x - cx); // CP1 = QP0 + 2/3 * (QP1-QP0)
+            cp1y = cy + (2 / 3) * (qp1y - cy);
+            cp2x = p3x + (2 / 3) * (qp1x - p3x); // CP2 = QP2 + 2/3 * (QP1-QP2)
+            cp2y = p3y + (2 / 3) * (qp1y - p3y);
           } else {
-            let [cp1x, cp1y, cp2x, cp2y, p3x, p3y] = c.args;
+            [cp1x, cp1y, cp2x, cp2y, p3x, p3y] = c.args;
           }
 
           // http://blog.hackers-cafe.net/2009/06/how-to-calculate-bezier-curves-bounding.html
           bbox.addPoint(p3x, p3y);
 
-          let p0 = [cx, cy];
-          let p1 = [cp1x, cp1y];
-          let p2 = [cp2x, cp2y];
-          let p3 = [p3x, p3y];
+          p0 = [cx, cy];
+          p1 = [cp1x, cp1y];
+          p2 = [cp2x, cp2y];
+          p3 = [p3x, p3y];
 
-          for (var i = 0; i <= 1; i++) {
-            let b = 6 * p0[i] - 12 * p1[i] + 6 * p2[i];
-            let a = -3 * p0[i] + 9 * p1[i] - 9 * p2[i] + 3 * p3[i];
-            c = 3 * p1[i] - 3 * p0[i];
+          for (i = 0; i <= 1; i++) {
+            const b = 6 * p0[i] - 12 * p1[i] + 6 * p2[i];
+            const a = -3 * p0[i] + 9 * p1[i] - 9 * p2[i] + 3 * p3[i];
+            const cc = 3 * p1[i] - 3 * p0[i];
 
             if (a === 0) {
               if (b === 0) {
                 continue;
               }
 
-              let t = -c / b;
+              const t = -cc / b;
               if (0 < t && t < 1) {
                 if (i === 0) {
                   bbox.addPoint(f(t), bbox.maxY);
@@ -142,12 +134,12 @@ export default class Path {
               continue;
             }
 
-            let b2ac = Math.pow(b, 2) - 4 * c * a;
+            const b2ac = Math.pow(b, 2) - 4 * cc * a;
             if (b2ac < 0) {
               continue;
             }
 
-            let t1 = (-b + Math.sqrt(b2ac)) / (2 * a);
+            const t1 = (-b + Math.sqrt(b2ac)) / (2 * a);
             if (0 < t1 && t1 < 1) {
               if (i === 0) {
                 bbox.addPoint(f(t1), bbox.maxY);
@@ -156,7 +148,7 @@ export default class Path {
               }
             }
 
-            let t2 = (-b - Math.sqrt(b2ac)) / (2 * a);
+            const t2 = (-b - Math.sqrt(b2ac)) / (2 * a);
             if (0 < t2 && t2 < 1) {
               if (i === 0) {
                 bbox.addPoint(f(t2), bbox.maxY);
@@ -176,17 +168,41 @@ export default class Path {
   }
 
   /**
+   * Compiles the path to a JavaScript function that can be applied with
+   * a graphics context in order to render the path.
+   * @return {string}
+   */
+  toFunction() {
+    return (ctx) => {
+      this.commands.forEach((c) => ctx[c.command].apply(ctx, c.args));
+    };
+  }
+
+  /**
+   * Converts the path to an SVG path data string
+   * @return {string}
+   */
+  toSVG() {
+    const cmds = this.commands.map((c) => {
+      const args = c.args.map((arg) => Math.round(arg * 100) / 100);
+      return `${SVG_COMMANDS[c.command]}${args.join(' ')}`;
+    });
+
+    return cmds.join('');
+  }
+
+  /**
    * Applies a mapping function to each point in the path.
    * @param {function} fn
    * @return {Path}
    */
   mapPoints(fn) {
-    let path = new Path();
+    const path = new Path();
 
-    for (let c of this.commands) {
-      let args = [];
+    for (const c of this.commands) {
+      const args = [];
       for (let i = 0; i < c.args.length; i += 2) {
-        let [x, y] = fn(c.args[i], c.args[i + 1]);
+        const [x, y] = fn(c.args[i], c.args[i + 1]);
         args.push(x, y);
       }
 
@@ -218,8 +234,8 @@ export default class Path {
    * Rotates the path by the given angle (in radians).
    */
   rotate(angle) {
-    let cos = Math.cos(angle);
-    let sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
     return this.transform(cos, sin, -sin, cos, 0, 0);
   }
 
@@ -231,7 +247,7 @@ export default class Path {
   }
 }
 
-for (let command of [
+for (const command of [
   'moveTo',
   'lineTo',
   'quadraticCurveTo',

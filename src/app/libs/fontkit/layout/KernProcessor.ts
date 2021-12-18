@@ -1,22 +1,24 @@
-import {binarySearch} from '../utils';
+import { binarySearch } from '../utils';
+import TTFFont from '../TTFFont';
+import Glyph from '../glyph/Glyph';
 
 export default class KernProcessor {
-  constructor(font) {
+  constructor(font: TTFFont) {
     this.kern = font.kern;
   }
 
-  process(glyphs, positions) {
+  process(glyphs: Glyph[], positions) {
     for (let glyphIndex = 0; glyphIndex < glyphs.length - 1; glyphIndex++) {
-      let left = glyphs[glyphIndex].id;
-      let right = glyphs[glyphIndex + 1].id;
+      const left = glyphs[glyphIndex].id;
+      const right = glyphs[glyphIndex + 1].id;
       positions[glyphIndex].xAdvance += this.getKerning(left, right);
     }
   }
 
-  getKerning(left, right) {
+  getKerning(left: number, right: number) {
     let res = 0;
 
-    for (let table of this.kern.tables) {
+    for (const table of this.kern.tables) {
       if (table.coverage.crossStream) {
         continue;
       }
@@ -39,11 +41,11 @@ export default class KernProcessor {
       }
 
       let val = 0;
-      let s = table.subtable;
+      const s = table.subtable;
       switch (table.format) {
         case 0:
-          let pairIdx = binarySearch(s.pairs, function (pair) {
-            return (left - pair.left) || (right - pair.right);
+          const pairIdx = binarySearch(s.pairs, function (pair) {
+            return left - pair.left || right - pair.right;
           });
 
           if (pairIdx >= 0) {
@@ -53,18 +55,25 @@ export default class KernProcessor {
           break;
 
         case 2:
-          let leftOffset = 0, rightOffset = 0;
-          if (left >= s.leftTable.firstGlyph && left < s.leftTable.firstGlyph + s.leftTable.nGlyphs) {
+          let leftOffset = 0;
+          let rightOffset = 0;
+          if (
+            left >= s.leftTable.firstGlyph &&
+            left < s.leftTable.firstGlyph + s.leftTable.nGlyphs
+          ) {
             leftOffset = s.leftTable.offsets[left - s.leftTable.firstGlyph];
           } else {
             leftOffset = s.array.off;
           }
 
-          if (right >= s.rightTable.firstGlyph && right < s.rightTable.firstGlyph + s.rightTable.nGlyphs) {
+          if (
+            right >= s.rightTable.firstGlyph &&
+            right < s.rightTable.firstGlyph + s.rightTable.nGlyphs
+          ) {
             rightOffset = s.rightTable.offsets[right - s.rightTable.firstGlyph];
           }
 
-          let index = (leftOffset + rightOffset - s.array.off) / 2;
+          const index = (leftOffset + rightOffset - s.array.off) / 2;
           val = s.array.values.get(index);
           break;
 
@@ -73,11 +82,18 @@ export default class KernProcessor {
             return 0;
           }
 
-          val = s.kernValue[s.kernIndex[s.leftClass[left] * s.rightClassCount + s.rightClass[right]]];
+          val =
+            s.kernValue[
+              s.kernIndex[
+                s.leftClass[left] * s.rightClassCount + s.rightClass[right]
+              ]
+            ];
           break;
 
         default:
-          throw new Error(`Unsupported kerning sub-table format ${table.format}`);
+          throw new Error(
+            `Unsupported kerning sub-table format ${table.format}`
+          );
       }
 
       // Microsoft supports the override flag, which resets the result

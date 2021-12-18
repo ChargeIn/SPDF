@@ -1,4 +1,6 @@
 export default class GlyphIterator {
+  private index: number;
+
   constructor(glyphs, options) {
     this.glyphs = glyphs;
     this.reset(options);
